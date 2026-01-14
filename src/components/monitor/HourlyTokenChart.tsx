@@ -91,7 +91,7 @@ export function HourlyTokenChart({ data, loading, isDark }: HourlyTokenChartProp
   // 图表数据
   const chartData = useMemo(() => {
     const labels = hourlyData.hours.map((hour) => {
-      const date = new Date(hour + ':00:00');
+      const date = new Date(hour + ':00:00Z'); // 添加 Z 表示 UTC 时间，确保正确转换为本地时间显示
       return `${date.getHours()}:00`;
     });
 
