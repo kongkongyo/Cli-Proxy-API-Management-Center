@@ -325,7 +325,10 @@
     "openai_test_success": "Test succeeded. The model responded.",
     "openai_test_failed": "Test failed",
     "openai_test_select_placeholder": "Choose from current models",
-    "openai_test_select_empty": "No models configured. Add models first"
+    "openai_test_select_empty": "No models configured. Add models first",
+    "search_placeholder": "Search configs (keys, URLs, models...)",
+    "search_empty_title": "No matching configs",
+    "search_empty_desc": "Try a different keyword or clear the search box"
   },
   "auth_files": {
     "title": "Auth Files Management",
