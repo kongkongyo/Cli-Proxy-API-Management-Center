@@ -48,10 +48,13 @@ export function HourlyTokenChart({ data, loading, isDark }: HourlyTokenChartProp
       hourlyStats[hour] = { total: 0, input: 0, output: 0, reasoning: 0, cached: 0 };
     });
 
-    // 收集每小时的 Token 数据
+    // 收集每小时的 Token 数据（只统计成功请求）
     Object.values(data.apis).forEach((apiData) => {
       Object.values(apiData.models).forEach((modelData) => {
         modelData.details.forEach((detail) => {
+          // 跳过失败请求，失败请求的 Token 数据不准确
+          if (detail.failed) return;
+
           const timestamp = new Date(detail.timestamp);
           if (timestamp < cutoffTime) return;
 

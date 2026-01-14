@@ -14,6 +14,8 @@ interface DailyTrendChartProps {
 interface DailyStat {
   date: string;
   requests: number;
+  successRequests: number;
+  failedRequests: number;
   inputTokens: number;
   outputTokens: number;
   reasoningTokens: number;
@@ -29,19 +31,33 @@ export function DailyTrendChart({ data, loading, isDark, timeRange }: DailyTrend
 
     const dailyStats: Record<string, {
       requests: number;
+      successRequests: number;
+      failedRequests: number;
       inputTokens: number;
       outputTokens: number;
       reasoningTokens: number;
       cachedTokens: number;
     }> = {};
 
+    // 辅助函数：获取本地日期字符串 YYYY-MM-DD
+    const getLocalDateString = (timestamp: string): string => {
+      const date = new Date(timestamp);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
     Object.values(data.apis).forEach((apiData) => {
       Object.values(apiData.models).forEach((modelData) => {
         modelData.details.forEach((detail) => {
-          const date = new Date(detail.timestamp).toISOString().split('T')[0];
+          // 使用本地日期而非 UTC 日期
+          const date = getLocalDateString(detail.timestamp);
           if (!dailyStats[date]) {
             dailyStats[date] = {
               requests: 0,
+              successRequests: 0,
+              failedRequests: 0,
               inputTokens: 0,
               outputTokens: 0,
               reasoningTokens: 0,
@@ -49,10 +65,16 @@ export function DailyTrendChart({ data, loading, isDark, timeRange }: DailyTrend
             };
           }
           dailyStats[date].requests++;
-          dailyStats[date].inputTokens += detail.tokens.input_tokens || 0;
-          dailyStats[date].outputTokens += detail.tokens.output_tokens || 0;
-          dailyStats[date].reasoningTokens += detail.tokens.reasoning_tokens || 0;
-          dailyStats[date].cachedTokens += detail.tokens.cached_tokens || 0;
+          if (detail.failed) {
+            dailyStats[date].failedRequests++;
+          } else {
+            dailyStats[date].successRequests++;
+            // 只统计成功请求的 Token
+            dailyStats[date].inputTokens += detail.tokens.input_tokens || 0;
+            dailyStats[date].outputTokens += detail.tokens.output_tokens || 0;
+            dailyStats[date].reasoningTokens += detail.tokens.reasoning_tokens || 0;
+            dailyStats[date].cachedTokens += detail.tokens.cached_tokens || 0;
+          }
         });
       });
     });
