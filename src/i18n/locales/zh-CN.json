@@ -325,7 +325,10 @@
     "openai_test_success": "测试成功，模型可用。",
     "openai_test_failed": "测试失败",
     "openai_test_select_placeholder": "从当前模型列表选择",
-    "openai_test_select_empty": "当前未配置模型，请先添加模型"
+    "openai_test_select_empty": "当前未配置模型，请先添加模型",
+    "search_placeholder": "搜索配置（密钥、地址、模型等）",
+    "search_empty_title": "没有匹配的配置",
+    "search_empty_desc": "请尝试更换关键字或清空搜索框"
   },
   "auth_files": {
     "title": "认证文件管理",
