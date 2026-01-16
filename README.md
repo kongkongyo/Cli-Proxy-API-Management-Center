@@ -26,7 +26,7 @@
 
 ### 使用本管理界面
 
-在你的 `config.yaml` 中添加以下配置：
+在你的 `config.yaml` 中修改以下配置：
 
 ```yaml
 remote-management:

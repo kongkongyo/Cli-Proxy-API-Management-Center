@@ -26,7 +26,7 @@ Management interface display
 
 ### Using This Management Interface
 
-Add the following configuration to your `config.yaml`:
+Modify following configuration in your `config.yaml`:
 
 ```yaml
 remote-management:
