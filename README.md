@@ -2,7 +2,7 @@
 
 > 一个基于官方仓库二次创作的 Web 管理界面
 
-[English Documentation](README_EN.md)
+**[English](README_EN.md) | [中文](README.md)**
 
 ---
 
