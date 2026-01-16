@@ -1,6 +1,6 @@
 # CLI Proxy API 管理中心 (CPAMC)
 
-> 一个超可爱的 Web 管理界面，这是基于官方仓库**二次创作**的自定义 UI，用来和你的 **CLI Proxy API** 一起愉快地玩耍吧！
+> 一个基于官方仓库二次创作的 Web 管理界面
 
 [English Documentation](README_EN.md)
 
@@ -8,22 +8,23 @@
 
 ## 关于本项目
 
-本项目是基于官方 [CLI Proxy API WebUI](https://github.com/router-for-me/Cli-Proxy-API-Management-Center) 进行开发的**日志监控**和**数据可视化**管理界面
+本项目是基于官方 [CLI Proxy API WebUI](https://github.com/router-for-me/Cli-Proxy-API-Management-Center) 进行开发的日志监控和数据可视化管理界面
 
 ### 与官方版本的区别
 
-本版本与官方版本其他功能保持一致，主要差异在于**新增监控中心**，对**日志分析和查看**的增强。
+本版本与官方版本其他功能保持一致，主要差异在于**新增监控中心**，对日志分析和查看的增强
 
+### 界面预览
+
+管理界面展示
+
+![Dashboard Preview](dashboard-preview.png)
 
 ---
 
 ## 快速开始
 
 ### 使用本管理界面
-
-CLI Proxy API 支持从自定义 GitHub 仓库获取管理面板，只需简单配置即可使用！
-
-#### 配置步骤
 
 在你的 `config.yaml` 中添加以下配置：
 
@@ -32,22 +33,19 @@ remote-management:
   panel-github-repository: "https://github.com/kongkongyo/CLIProxyAPI-Web-Dashboard"
 ```
 
-配置完成后，重启 CLI Proxy API 服务，访问 `http://<host>:<api_port>/management.html` 就能看到全新的管理界面啦~
+配置完成后，重启 CLI Proxy API 服务，访问 `http://<host>:<api_port>/management.html` 即可查看管理界面
 
-#### 工作原理
-
-- 后台会定期检查仓库的最新 Release
-- 自动查找名为 `management.html` 的资产
-- 下载到静态目录（默认 `static/`，或 `MANAGEMENT_STATIC_PATH` 指定）
-- 如资产包含 `digest` 字段（推荐格式：`sha256:<hex>`），会进行哈希校验
+详细配置说明请参考官方文档：https://help.router-for.me/cn/management/webui.html
 
 ---
 
 ## 主要功能
 
-### 监控中心 - **核心新增功能**
+### 监控中心 - 核心新增功能
 
-这是本管理界面相对于官方版本的**唯一新增功能**，提供了全方位的数据可视化和监控能力：
+这是本管理界面相对于官方版本的唯一新增功能，提供了全方位的数据可视化和监控能力
+
+> 注意：CLI Proxy API 主程序目前没有数据持久化功能，重启程序后统计数据会丢失。需要先通过 API 使用相关服务产生数据后，才能在监控中心看到统计信息。
 
 #### KPI 指标仪表盘
 
@@ -58,7 +56,7 @@ remote-management:
 - **平均 RPM**：每分钟请求数
 - **日均 RPD**：日均请求数
 
-所有指标都会根据选择的时间范围（今天/7天/14天/30天）动态计算
+所有指标都会根据选择的时间范围（今天/7天/14天/30天）动态计算，实时更新
 
 #### 模型用量分布
 
@@ -107,9 +105,9 @@ remote-management:
 - 列出主要失败的模型
 - 点击展开查看该渠道下所有失败的请求详情
 
-#### 请求日志 - **高级功能**
+#### 请求日志 - 高级功能
 
-功能强大的请求日志表格，支持海量数据流畅浏览：
+功能强大的请求日志表格，支持海量数据流畅浏览
 
 **多维度筛选**
 - 按 API Key 筛选
@@ -150,17 +148,17 @@ remote-management:
 
 ## 官方版本功能
 
-以下功能与官方版本一致，通过改进的界面提供更好的使用体验：
+以下功能与官方版本一致，通过改进的界面提供更好的使用体验
 
 ### 仪表盘
-- 连接状态实时监控，就像心跳一样跳动
+- 连接状态实时监控
 - 服务器版本和构建信息一目了然
 - 使用数据快速概览，掌握全局
-- 可用模型统计，看看你的 AI 伙伴们
+- 可用模型统计
 
 ### API 密钥管理
 - 添加、编辑、删除 API 密钥
-- 管理你的代理服务认证，安全又方便
+- 管理代理服务认证
 
 ### AI 提供商配置
 - **Gemini**：API 密钥管理、排除模型、模型前缀
@@ -220,7 +218,7 @@ remote-management:
 
 ### API 地址格式
 
-以下格式都可以哦，系统会自动识别的：
+以下格式都可以，系统会自动识别
 
 ```
 localhost:8317
@@ -230,11 +228,11 @@ https://example.com:8317
 
 ### 管理密钥
 
-管理密钥是验证管理操作的魔法钥匙，和客户端使用的 API 密钥不一样哦！
+管理密钥是验证管理操作的钥匙，和客户端使用的 API 密钥不一样
 
 ### 远程管理
 
-从非本地浏览器访问的时候，记得要在服务器启用远程管理（`allow-remote-management: true`）
+从非本地浏览器访问的时候，需要在服务器启用远程管理（`allow-remote-management: true`）
 
 ---
 
@@ -260,7 +258,7 @@ https://example.com:8317
 
 **Q: 如何使用这个自定义 UI？**
 
-A: 在 CLI Proxy API 的配置文件中添加以下配置即可~
+A: 在 CLI Proxy API 的配置文件中添加以下配置即可
 ```yaml
 remote-management:
   panel-github-repository: "https://github.com/kongkongyo/CLIProxyAPI-Web-Dashboard"
@@ -268,31 +266,31 @@ remote-management:
 
 **Q: 无法连接到服务器？**
 
-A: 请检查这些哦~
-- API 地址是不是写错了？
-- 管理密钥是不是正确？
-- 服务器启动了吗？
-- 远程访问有没有启用？
+A: 请检查以下内容
+- API 地址是否正确
+- 管理密钥是否正确
+- 服务器是否启动
+- 远程访问是否启用
 
 **Q: 日志页面不显示？**
 
-A: 需要去"基础设置"里开启"日志记录到文件"功能才行哦~
+A: 需要去"基础设置"里开启"日志记录到文件"功能
 
 **Q: 某些功能显示"不支持"？**
 
-A: 可能是服务器版本太旧啦，升级到最新版本的 CLI Proxy API 就可以了！
+A: 可能是服务器版本太旧，升级到最新版本的 CLI Proxy API
 
 **Q: OpenAI 提供商测试失败？**
 
-A: 测试是在浏览器端执行的，可能会受到 CORS 限制~ 失败不一定代表服务器端不能用哦，不要担心！
+A: 测试是在浏览器端执行的，可能会受到 CORS 限制，失败不一定代表服务器端不能用
 
 **Q: 这个版本和官方版本有什么区别？**
 
 A: 主要区别有两个：
-1. **界面风格**：全新的视觉设计，更加清新可爱，UI 细节更精致
-2. **监控中心**：这是**唯一新增的功能模块**，提供了强大的数据可视化和监控能力，包括 KPI 仪表盘、模型用量分布、趋势分析、小时级图表、渠道统计、失败分析和高级请求日志等功能
+1. **界面风格**：全新的视觉设计，UI 细节更精致
+2. **监控中心**：这是唯一新增的功能模块，提供了强大的数据可视化和监控能力，包括 KPI 仪表盘、模型用量分布、趋势分析、小时级图表、渠道统计、失败分析和高级请求日志等功能
 
-其他所有功能与官方版本保持一致！
+其他所有功能与官方版本保持一致
 
 ---
 
@@ -301,13 +299,7 @@ A: 主要区别有两个：
 - **官方主程序**: https://github.com/router-for-me/CLIProxyAPI
 - **官方 WebUI**: https://github.com/router-for-me/Cli-Proxy-API-Management-Center
 - **本仓库**: https://github.com/kongkongyo/CLIProxyAPI-Web-Dashboard
-- **示例地址**: https://remote.router-for.me/
-- **最低版本要求**: ≥ 6.3.0（推荐 ≥ 6.5.0）
 
 ## 许可证
 
 MIT License
-
----
-
-*感谢使用这个自定义版管理中心！祝你使用愉快！*
