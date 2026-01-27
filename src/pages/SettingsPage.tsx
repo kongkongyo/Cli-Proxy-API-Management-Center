@@ -15,6 +15,7 @@ type PendingKey =
   | 'retry'
   | 'logsMaxSize'
   | 'forceModelPrefix'
+  | 'routingPreference'
   | 'routingStrategy'
   | 'switchProject'
   | 'switchPreview'
@@ -35,6 +36,7 @@ export function SettingsPage() {
   const [proxyValue, setProxyValue] = useState('');
   const [retryValue, setRetryValue] = useState(0);
   const [logsMaxTotalSizeMb, setLogsMaxTotalSizeMb] = useState(0);
+  const [routingPreference, setRoutingPreference] = useState('provider-first');
   const [routingStrategy, setRoutingStrategy] = useState('round-robin');
   const [pending, setPending] = useState<Record<PendingKey, boolean>>({} as Record<PendingKey, boolean>);
   const [error, setError] = useState('');
@@ -46,11 +48,13 @@ export function SettingsPage() {
       setLoading(true);
       setError('');
       try {
-        const [configResult, logsResult, prefixResult, routingResult] = await Promise.allSettled([
+        const [configResult, logsResult, prefixResult, routingResult, routingPreferenceResult] =
+          await Promise.allSettled([
           fetchConfig(),
           configApi.getLogsMaxTotalSizeMb(),
           configApi.getForceModelPrefix(),
           configApi.getRoutingStrategy(),
+          configApi.getRoutingPreference(),
         ]);
 
         if (configResult.status !== 'fulfilled') {
@@ -74,6 +78,14 @@ export function SettingsPage() {
           setRoutingStrategy(String(routingResult.value));
           updateConfigValue('routing/strategy', String(routingResult.value));
         }
+
+        if (routingPreferenceResult.status === 'fulfilled' && routingPreferenceResult.value !== undefined) {
+          const value = String(routingPreferenceResult.value || '').trim();
+          if (value) {
+            setRoutingPreference(value);
+            updateConfigValue('routing/preference', value);
+          }
+        }
       } catch (err: any) {
         setError(err?.message || t('notification.refresh_failed'));
       } finally {
@@ -96,8 +108,17 @@ export function SettingsPage() {
       if (config.routingStrategy) {
         setRoutingStrategy(config.routingStrategy);
       }
+      if (config.routingPreference) {
+        setRoutingPreference(config.routingPreference);
+      }
     }
-  }, [config?.proxyUrl, config?.requestRetry, config?.logsMaxTotalSizeMb, config?.routingStrategy]);
+  }, [
+    config?.proxyUrl,
+    config?.requestRetry,
+    config?.logsMaxTotalSizeMb,
+    config?.routingStrategy,
+    config?.routingPreference
+  ]);
 
   const setPendingFlag = (key: PendingKey, value: boolean) => {
     setPending((prev) => ({ ...prev, [key]: value }));
@@ -226,7 +247,7 @@ export function SettingsPage() {
 
   const handleRoutingStrategyUpdate = async () => {
     const strategy = routingStrategy.trim();
-    if (!strategy) {
+    if (!strategy || !['round-robin', 'fill-first'].includes(strategy)) {
       showNotification(t('login.error_invalid'), 'error');
       return;
     }
@@ -243,6 +264,29 @@ export function SettingsPage() {
       showNotification(`${t('notification.update_failed')}: ${err?.message || ''}`, 'error');
     } finally {
       setPendingFlag('routingStrategy', false);
+    }
+  };
+
+  const handleRoutingPreferenceUpdate = async () => {
+    const preference = routingPreference.trim();
+    if (!preference || !['provider-first', 'credential-first'].includes(preference)) {
+      showNotification(t('login.error_invalid'), 'error');
+      return;
+    }
+
+    const previous = config?.routingPreference ?? 'provider-first';
+    setPendingFlag('routingPreference', true);
+    updateConfigValue('routing/preference', preference);
+    try {
+      await configApi.updateRoutingPreference(preference);
+      clearCache('routing/preference');
+      showNotification(t('notification.routing_preference_updated'), 'success');
+    } catch (err: any) {
+      setRoutingPreference(previous);
+      updateConfigValue('routing/preference', previous);
+      showNotification(`${t('notification.update_failed')}: ${err?.message || ''}`, 'error');
+    } finally {
+      setPendingFlag('routingPreference', false);
     }
   };
 
@@ -396,6 +440,30 @@ export function SettingsPage() {
       </Card>
 
       <Card title={t('basic_settings.routing_title')}>
+        <div className={`${styles.retryRow} ${styles.retryRowAligned} ${styles.retryRowInputGrow}`}>
+          <div className="form-group">
+            <label>{t('basic_settings.routing_preference_label')}</label>
+            <select
+              className="input"
+              value={routingPreference}
+              onChange={(e) => setRoutingPreference(e.target.value)}
+              disabled={disableControls || loading}
+            >
+              <option value="provider-first">{t('basic_settings.routing_preference_provider_first')}</option>
+              <option value="credential-first">{t('basic_settings.routing_preference_credential_first')}</option>
+            </select>
+            <div className="hint">{t('basic_settings.routing_preference_hint')}</div>
+          </div>
+          <Button
+            className={styles.retryButton}
+            onClick={handleRoutingPreferenceUpdate}
+            loading={pending.routingPreference}
+            disabled={disableControls || loading}
+          >
+            {t('basic_settings.routing_preference_update')}
+          </Button>
+        </div>
+
         <div className={`${styles.retryRow} ${styles.retryRowAligned} ${styles.retryRowInputGrow}`}>
           <div className="form-group">
             <label>{t('basic_settings.routing_strategy_label')}</label>

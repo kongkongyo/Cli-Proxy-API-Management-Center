@@ -274,8 +274,10 @@ export const normalizeConfigResponse = (raw: any): Config => {
   const routing = raw.routing;
   if (routing && typeof routing === 'object') {
     config.routingStrategy = routing.strategy ?? routing['strategy'];
+    config.routingPreference = routing.preference ?? routing['preference'];
   } else {
     config.routingStrategy = raw['routing-strategy'] ?? raw.routingStrategy;
+    config.routingPreference = raw['routing-preference'] ?? raw.routingPreference;
   }
   config.apiKeys = Array.isArray(raw['api-keys']) ? raw['api-keys'].slice() : raw.apiKeys;
 
