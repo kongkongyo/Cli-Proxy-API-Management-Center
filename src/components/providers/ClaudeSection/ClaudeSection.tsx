@@ -15,7 +15,7 @@ import {
 import styles from '@/pages/AiProvidersPage.module.scss';
 import { ProviderList } from '../ProviderList';
 import { ProviderStatusBar } from '../ProviderStatusBar';
-import { getStatsBySource, hasDisableAllModelsRule } from '../utils';
+import { getStatsBySource, hasDisableAllModelsRule, normalizePriority } from '../utils';
 import type { ProviderFormState } from '../types';
 import { ClaudeModal } from './ClaudeModal';
 
@@ -124,6 +124,12 @@ export function ClaudeSection({
                 <div className={styles.fieldRow}>
                   <span className={styles.fieldLabel}>{t('common.api_key')}:</span>
                   <span className={styles.fieldValue}>{maskApiKey(item.apiKey)}</span>
+                </div>
+                <div className={styles.fieldRow}>
+                  <span className={styles.fieldLabel}>
+                    {t('common.priority', { defaultValue: '优先级' })}:
+                  </span>
+                  <span className={styles.fieldValue}>{normalizePriority(item.priority)}</span>
                 </div>
                 {item.prefix && (
                   <div className={styles.fieldRow}>

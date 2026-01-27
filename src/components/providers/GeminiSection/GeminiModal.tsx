@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import type { GeminiKeyConfig } from '@/types';
 import { headersToEntries } from '@/utils/headers';
-import { excludedModelsToText } from '../utils';
+import { excludedModelsToText, normalizePriority } from '../utils';
 import type { GeminiFormState, ProviderModalProps } from '../types';
 
 interface GeminiModalProps extends ProviderModalProps<GeminiKeyConfig, GeminiFormState> {
@@ -15,6 +15,7 @@ interface GeminiModalProps extends ProviderModalProps<GeminiKeyConfig, GeminiFor
 
 const buildEmptyForm = (): GeminiFormState => ({
   apiKey: '',
+  priority: 2,
   prefix: '',
   baseUrl: '',
   headers: [],
@@ -39,6 +40,7 @@ export function GeminiModal({
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setForm({
         ...initialData,
+        priority: normalizePriority(initialData.priority),
         headers: headersToEntries(initialData.headers),
         excludedText: excludedModelsToText(initialData.excludedModels),
       });
@@ -90,6 +92,24 @@ export function GeminiModal({
         value={form.baseUrl ?? ''}
         onChange={(e) => setForm((prev) => ({ ...prev, baseUrl: e.target.value }))}
       />
+      <div className="form-group">
+        <label>{t('common.priority', { defaultValue: '优先级' })}</label>
+        <select
+          className="input"
+          value={form.priority ?? 2}
+          onChange={(e) => setForm((prev) => ({ ...prev, priority: Number(e.target.value) }))}
+          disabled={isSaving}
+        >
+          <option value={3}>{t('common.priority_option_preferred', { defaultValue: '3（优先）' })}</option>
+          <option value={2}>{t('common.priority_option_default', { defaultValue: '2（默认）' })}</option>
+          <option value={1}>{t('common.priority_option_fallback', { defaultValue: '1（兜底）' })}</option>
+        </select>
+        <div className="hint">
+          {t('common.priority_hint', {
+            defaultValue: '1=兜底，2=默认，3=优先。优先级高的会先被使用。',
+          })}
+        </div>
+      </div>
       <HeaderInputList
         entries={form.headers}
         onChange={(entries) => setForm((prev) => ({ ...prev, headers: entries }))}

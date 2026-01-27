@@ -99,6 +99,11 @@ const normalizeProviderKeyConfig = (item: any): ProviderKeyConfig | null => {
   if (!trimmed) return null;
 
   const config: ProviderKeyConfig = { apiKey: trimmed };
+  const priorityRaw = item.priority ?? item['priority'];
+  if (priorityRaw !== undefined && priorityRaw !== null && priorityRaw !== '') {
+    const parsed = typeof priorityRaw === 'number' ? priorityRaw : Number(priorityRaw);
+    if (Number.isFinite(parsed)) config.priority = parsed;
+  }
   const prefix = normalizePrefix(item.prefix ?? item['prefix']);
   if (prefix) config.prefix = prefix;
   const baseUrl = item['base-url'] ?? item.baseUrl;
@@ -126,6 +131,11 @@ const normalizeGeminiKeyConfig = (item: any): GeminiKeyConfig | null => {
   if (!trimmed) return null;
 
   const config: GeminiKeyConfig = { apiKey: trimmed };
+  const priorityRaw = item.priority ?? item['priority'];
+  if (priorityRaw !== undefined && priorityRaw !== null && priorityRaw !== '') {
+    const parsed = typeof priorityRaw === 'number' ? priorityRaw : Number(priorityRaw);
+    if (Number.isFinite(parsed)) config.priority = parsed;
+  }
   const prefix = normalizePrefix(item.prefix ?? item['prefix']);
   if (prefix) config.prefix = prefix;
   const baseUrl = item['base-url'] ?? item.baseUrl ?? item['base_url'];

@@ -7,6 +7,7 @@ import { Modal } from '@/components/ui/Modal';
 import { ModelInputList, modelsToEntries } from '@/components/ui/ModelInputList';
 import type { ProviderKeyConfig } from '@/types';
 import { headersToEntries } from '@/utils/headers';
+import { normalizePriority } from '../utils';
 import type { ProviderModalProps, VertexFormState } from '../types';
 
 interface VertexModalProps extends ProviderModalProps<ProviderKeyConfig, VertexFormState> {
@@ -15,6 +16,7 @@ interface VertexModalProps extends ProviderModalProps<ProviderKeyConfig, VertexF
 
 const buildEmptyForm = (): VertexFormState => ({
   apiKey: '',
+  priority: 2,
   prefix: '',
   baseUrl: '',
   proxyUrl: '',
@@ -40,6 +42,7 @@ export function VertexModal({
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setForm({
         ...initialData,
+        priority: normalizePriority(initialData.priority),
         headers: headersToEntries(initialData.headers),
         modelEntries: modelsToEntries(initialData.models),
       });
@@ -87,6 +90,24 @@ export function VertexModal({
         value={form.baseUrl ?? ''}
         onChange={(e) => setForm((prev) => ({ ...prev, baseUrl: e.target.value }))}
       />
+      <div className="form-group">
+        <label>{t('common.priority', { defaultValue: '优先级' })}</label>
+        <select
+          className="input"
+          value={form.priority ?? 2}
+          onChange={(e) => setForm((prev) => ({ ...prev, priority: Number(e.target.value) }))}
+          disabled={isSaving}
+        >
+          <option value={3}>{t('common.priority_option_preferred', { defaultValue: '3（优先）' })}</option>
+          <option value={2}>{t('common.priority_option_default', { defaultValue: '2（默认）' })}</option>
+          <option value={1}>{t('common.priority_option_fallback', { defaultValue: '1（兜底）' })}</option>
+        </select>
+        <div className="hint">
+          {t('common.priority_hint', {
+            defaultValue: '1=兜底，2=默认，3=优先。优先级高的会先被使用。',
+          })}
+        </div>
+      </div>
       <Input
         label={t('ai_providers.vertex_add_modal_proxy_label')}
         placeholder={t('ai_providers.vertex_add_modal_proxy_placeholder')}

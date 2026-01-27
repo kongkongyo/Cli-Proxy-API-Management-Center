@@ -48,6 +48,9 @@ const serializeApiKeyEntry = (entry: ApiKeyEntry) => {
 
 const serializeProviderKey = (config: ProviderKeyConfig) => {
   const payload: Record<string, any> = { 'api-key': config.apiKey };
+  if (typeof config.priority === 'number' && Number.isFinite(config.priority)) {
+    payload.priority = config.priority;
+  }
   if (config.prefix?.trim()) payload.prefix = config.prefix.trim();
   if (config.baseUrl) payload['base-url'] = config.baseUrl;
   if (config.proxyUrl) payload['proxy-url'] = config.proxyUrl;
@@ -75,6 +78,9 @@ const serializeVertexModelAliases = (models?: ModelAlias[]) =>
 
 const serializeVertexKey = (config: ProviderKeyConfig) => {
   const payload: Record<string, any> = { 'api-key': config.apiKey };
+  if (typeof config.priority === 'number' && Number.isFinite(config.priority)) {
+    payload.priority = config.priority;
+  }
   if (config.prefix?.trim()) payload.prefix = config.prefix.trim();
   if (config.baseUrl) payload['base-url'] = config.baseUrl;
   if (config.proxyUrl) payload['proxy-url'] = config.proxyUrl;
@@ -87,6 +93,9 @@ const serializeVertexKey = (config: ProviderKeyConfig) => {
 
 const serializeGeminiKey = (config: GeminiKeyConfig) => {
   const payload: Record<string, any> = { 'api-key': config.apiKey };
+  if (typeof config.priority === 'number' && Number.isFinite(config.priority)) {
+    payload.priority = config.priority;
+  }
   if (config.prefix?.trim()) payload.prefix = config.prefix.trim();
   if (config.baseUrl) payload['base-url'] = config.baseUrl;
   const headers = serializeHeaders(config.headers);

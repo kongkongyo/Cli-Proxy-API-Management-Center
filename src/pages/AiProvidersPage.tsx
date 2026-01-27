@@ -17,6 +17,7 @@ import {
 } from '@/components/providers';
 import {
   parseExcludedModels,
+  normalizePriority,
   withDisableAllModelsRule,
   withoutDisableAllModelsRule,
 } from '@/components/providers/utils';
@@ -272,6 +273,7 @@ export function AiProvidersPage() {
     try {
       const payload: GeminiKeyConfig = {
         apiKey: form.apiKey.trim(),
+        priority: normalizePriority(form.priority),
         prefix: form.prefix?.trim() || undefined,
         baseUrl: form.baseUrl?.trim() || undefined,
         headers: buildHeaderObject(form.headers),
@@ -434,6 +436,7 @@ export function AiProvidersPage() {
 
       const payload: ProviderKeyConfig = {
         apiKey: form.apiKey.trim(),
+        priority: normalizePriority(form.priority),
         prefix: form.prefix?.trim() || undefined,
         baseUrl,
         proxyUrl: form.proxyUrl?.trim() || undefined,
@@ -524,6 +527,7 @@ export function AiProvidersPage() {
     try {
       const payload: ProviderKeyConfig = {
         apiKey: form.apiKey.trim(),
+        priority: normalizePriority(form.priority),
         prefix: form.prefix?.trim() || undefined,
         baseUrl,
         proxyUrl: form.proxyUrl?.trim() || undefined,
@@ -600,6 +604,7 @@ export function AiProvidersPage() {
         })),
       };
       if (form.testModel) payload.testModel = form.testModel.trim();
+      payload.priority = normalizePriority(form.priority);
       const models = entriesToModels(form.modelEntries);
       if (models.length) payload.models = models;
 

@@ -210,6 +210,7 @@ export function AuthFilesPage() {
   const [deleting, setDeleting] = useState<string | null>(null);
   const [deletingAll, setDeletingAll] = useState(false);
   const [statusUpdating, setStatusUpdating] = useState<Record<string, boolean>>({});
+  const [priorityUpdating, setPriorityUpdating] = useState<Record<string, boolean>>({});
   const [keyStats, setKeyStats] = useState<KeyStats>({ bySource: {}, byAuthIndex: {} });
   const [usageDetails, setUsageDetails] = useState<UsageDetail[]>([]);
 
@@ -965,6 +966,53 @@ export function AuthFilesPage() {
     }
   };
 
+  const normalizePriority = (value: unknown): 1 | 2 | 3 => {
+    const parsed =
+      typeof value === 'number'
+        ? value
+        : value === undefined || value === null || value === ''
+          ? NaN
+          : Number(value);
+    if (!Number.isFinite(parsed)) return 2;
+    if (parsed === 0) return 2;
+    if (parsed <= 1) return 1;
+    if (parsed >= 3) return 3;
+    return 2;
+  };
+
+  const handlePriorityChange = async (item: AuthFileItem, priority: number) => {
+    const name = item.name;
+    const previousPriority = normalizePriority(item.priority);
+    const nextPriority = normalizePriority(priority);
+
+    if (previousPriority === nextPriority) return;
+    if (isRuntimeOnlyAuthFile(item)) return;
+
+    setPriorityUpdating((prev) => ({ ...prev, [name]: true }));
+    setFiles((prev) => prev.map((f) => (f.name === name ? { ...f, priority: nextPriority } : f)));
+
+    try {
+      const res = await authFilesApi.setPriority(name, nextPriority);
+      setFiles((prev) =>
+        prev.map((f) => (f.name === name ? { ...f, priority: normalizePriority(res.priority) } : f))
+      );
+      showNotification(t('auth_files.priority_updated_success', { name }), 'success');
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : '';
+      setFiles((prev) =>
+        prev.map((f) => (f.name === name ? { ...f, priority: previousPriority } : f))
+      );
+      showNotification(`${t('notification.update_failed')}: ${errorMessage}`, 'error');
+    } finally {
+      setPriorityUpdating((prev) => {
+        if (!prev[name]) return prev;
+        const next = { ...prev };
+        delete next[name];
+        return next;
+      });
+    }
+  };
+
   // 显示详情弹窗
   const showDetails = (file: AuthFileItem) => {
     setSelectedFile(file);
@@ -1352,6 +1400,7 @@ export function AuthFilesPage() {
 	  const renderFileCard = (item: AuthFileItem) => {
 	    const fileStats = resolveAuthFileStats(item, keyStats);
 	    const isRuntimeOnly = isRuntimeOnlyAuthFile(item);
+	    const priorityValue = normalizePriority(item.priority);
 	    const isAistudio = (item.type || '').toLowerCase() === 'aistudio';
 	    const showModelsButton = !isRuntimeOnly || isAistudio;
 	    const typeColor = getTypeColor(item.type || 'unknown');
@@ -1381,6 +1430,24 @@ export function AuthFilesPage() {
           </span>
           <span>
             {t('auth_files.file_modified')}: {formatModified(item)}
+          </span>
+          <span>
+            {t('common.priority', { defaultValue: '优先级' })}:{' '}
+            <select
+              className={styles.prioritySelect}
+              value={priorityValue}
+              onChange={(e) => void handlePriorityChange(item, Number(e.target.value))}
+              disabled={
+                disableControls ||
+                isRuntimeOnly ||
+                priorityUpdating[item.name] === true ||
+                statusUpdating[item.name] === true
+              }
+            >
+              <option value={3}>{t('common.priority_option_preferred', { defaultValue: '3（优先）' })}</option>
+              <option value={2}>{t('common.priority_option_default', { defaultValue: '2（默认）' })}</option>
+              <option value={1}>{t('common.priority_option_fallback', { defaultValue: '1（兜底）' })}</option>
+            </select>
           </span>
         </div>
 

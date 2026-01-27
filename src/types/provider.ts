@@ -18,6 +18,7 @@ export interface ApiKeyEntry {
 
 export interface GeminiKeyConfig {
   apiKey: string;
+  priority?: number;
   prefix?: string;
   baseUrl?: string;
   headers?: Record<string, string>;
@@ -26,6 +27,7 @@ export interface GeminiKeyConfig {
 
 export interface ProviderKeyConfig {
   apiKey: string;
+  priority?: number;
   prefix?: string;
   baseUrl?: string;
   proxyUrl?: string;

@@ -11,7 +11,7 @@ import type { OpenAIProviderConfig, ApiKeyEntry } from '@/types';
 import { buildHeaderObject, headersToEntries } from '@/utils/headers';
 import type { ModelInfo } from '@/utils/models';
 import styles from '@/pages/AiProvidersPage.module.scss';
-import { buildApiKeyEntry, buildOpenAIChatCompletionsEndpoint } from '../utils';
+import { buildApiKeyEntry, buildOpenAIChatCompletionsEndpoint, normalizePriority } from '../utils';
 import type { ModelEntry, OpenAIFormState, ProviderModalProps } from '../types';
 import { OpenAIDiscoveryModal } from './OpenAIDiscoveryModal';
 
@@ -26,6 +26,7 @@ const buildEmptyForm = (): OpenAIFormState => ({
   prefix: '',
   baseUrl: '',
   headers: [],
+  priority: 2,
   apiKeyEntries: [buildApiKeyEntry()],
   modelEntries: [{ name: '', alias: '' }],
   testModel: undefined,
@@ -71,6 +72,7 @@ export function OpenAIModal({
         prefix: initialData.prefix ?? '',
         baseUrl: initialData.baseUrl,
         headers: headersToEntries(initialData.headers),
+        priority: normalizePriority(initialData.priority),
         testModel: initialData.testModel,
         modelEntries,
         apiKeyEntries: initialData.apiKeyEntries?.length
@@ -331,6 +333,24 @@ export function OpenAIModal({
           value={form.baseUrl}
           onChange={(e) => setForm((prev) => ({ ...prev, baseUrl: e.target.value }))}
         />
+        <div className="form-group">
+          <label>{t('common.priority', { defaultValue: '优先级' })}</label>
+          <select
+            className="input"
+            value={form.priority ?? 2}
+            onChange={(e) => setForm((prev) => ({ ...prev, priority: Number(e.target.value) }))}
+            disabled={isSaving}
+          >
+            <option value={3}>{t('common.priority_option_preferred', { defaultValue: '3（优先）' })}</option>
+            <option value={2}>{t('common.priority_option_default', { defaultValue: '2（默认）' })}</option>
+            <option value={1}>{t('common.priority_option_fallback', { defaultValue: '1（兜底）' })}</option>
+          </select>
+          <div className="hint">
+            {t('common.priority_hint', {
+              defaultValue: '1=兜底，2=默认，3=优先。优先级高的会先被使用。',
+            })}
+          </div>
+        </div>
 
         <HeaderInputList
           entries={form.headers}

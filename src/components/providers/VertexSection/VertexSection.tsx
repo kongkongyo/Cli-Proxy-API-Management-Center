@@ -14,7 +14,7 @@ import {
 import styles from '@/pages/AiProvidersPage.module.scss';
 import { ProviderList } from '../ProviderList';
 import { ProviderStatusBar } from '../ProviderStatusBar';
-import { getStatsBySource } from '../utils';
+import { getStatsBySource, normalizePriority } from '../utils';
 import type { VertexFormState } from '../types';
 import { VertexModal } from './VertexModal';
 
@@ -111,6 +111,12 @@ export function VertexSection({
                 <div className={styles.fieldRow}>
                   <span className={styles.fieldLabel}>{t('common.api_key')}:</span>
                   <span className={styles.fieldValue}>{maskApiKey(item.apiKey)}</span>
+                </div>
+                <div className={styles.fieldRow}>
+                  <span className={styles.fieldLabel}>
+                    {t('common.priority', { defaultValue: '优先级' })}:
+                  </span>
+                  <span className={styles.fieldValue}>{normalizePriority(item.priority)}</span>
                 </div>
                 {item.prefix && (
                   <div className={styles.fieldRow}>

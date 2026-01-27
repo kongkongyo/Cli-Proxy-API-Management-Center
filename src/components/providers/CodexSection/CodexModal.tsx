@@ -7,7 +7,7 @@ import { Modal } from '@/components/ui/Modal';
 import type { ProviderKeyConfig } from '@/types';
 import { headersToEntries } from '@/utils/headers';
 import { modelsToEntries } from '@/components/ui/ModelInputList';
-import { excludedModelsToText } from '../utils';
+import { excludedModelsToText, normalizePriority } from '../utils';
 import type { ProviderFormState, ProviderModalProps } from '../types';
 
 interface CodexModalProps extends ProviderModalProps<ProviderKeyConfig, ProviderFormState> {
@@ -16,6 +16,7 @@ interface CodexModalProps extends ProviderModalProps<ProviderKeyConfig, Provider
 
 const buildEmptyForm = (): ProviderFormState => ({
   apiKey: '',
+  priority: 2,
   prefix: '',
   baseUrl: '',
   proxyUrl: '',
@@ -43,6 +44,7 @@ export function CodexModal({
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setForm({
         ...initialData,
+        priority: normalizePriority(initialData.priority),
         headers: headersToEntries(initialData.headers),
         modelEntries: modelsToEntries(initialData.models),
         excludedText: excludedModelsToText(initialData.excludedModels),
@@ -89,6 +91,24 @@ export function CodexModal({
         value={form.baseUrl ?? ''}
         onChange={(e) => setForm((prev) => ({ ...prev, baseUrl: e.target.value }))}
       />
+      <div className="form-group">
+        <label>{t('common.priority', { defaultValue: '优先级' })}</label>
+        <select
+          className="input"
+          value={form.priority ?? 2}
+          onChange={(e) => setForm((prev) => ({ ...prev, priority: Number(e.target.value) }))}
+          disabled={isSaving}
+        >
+          <option value={3}>{t('common.priority_option_preferred', { defaultValue: '3（优先）' })}</option>
+          <option value={2}>{t('common.priority_option_default', { defaultValue: '2（默认）' })}</option>
+          <option value={1}>{t('common.priority_option_fallback', { defaultValue: '1（兜底）' })}</option>
+        </select>
+        <div className="hint">
+          {t('common.priority_hint', {
+            defaultValue: '1=兜底，2=默认，3=优先。优先级高的会先被使用。',
+          })}
+        </div>
+      </div>
       <Input
         label={t('ai_providers.codex_add_modal_proxy_label')}
         value={form.proxyUrl ?? ''}

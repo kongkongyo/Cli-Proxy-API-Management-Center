@@ -491,6 +491,16 @@
   border-bottom: 1px solid var(--border-color);
 }
 
+.prioritySelect {
+  margin-left: 6px;
+  padding: 2px 8px;
+  font-size: 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}
+
 .cardStats {
   display: flex;
   flex-wrap: wrap;

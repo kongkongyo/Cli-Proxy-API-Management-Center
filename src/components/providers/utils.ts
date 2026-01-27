@@ -4,6 +4,21 @@ import type { AmpcodeFormState, ModelEntry } from './types';
 
 export const DISABLE_ALL_MODELS_RULE = '*';
 
+export const normalizePriority = (value: unknown): 1 | 2 | 3 => {
+  const parsed =
+    typeof value === 'number'
+      ? value
+      : value === undefined || value === null || value === ''
+        ? NaN
+        : Number(value);
+
+  if (!Number.isFinite(parsed)) return 2;
+  if (parsed === 0) return 2;
+  if (parsed <= 1) return 1;
+  if (parsed >= 3) return 3;
+  return 2;
+};
+
 export const hasDisableAllModelsRule = (models?: string[]) =>
   Array.isArray(models) &&
   models.some((model) => String(model ?? '').trim() === DISABLE_ALL_MODELS_RULE);

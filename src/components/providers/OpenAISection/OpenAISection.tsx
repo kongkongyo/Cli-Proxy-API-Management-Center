@@ -16,7 +16,7 @@ import {
 import styles from '@/pages/AiProvidersPage.module.scss';
 import { ProviderList } from '../ProviderList';
 import { ProviderStatusBar } from '../ProviderStatusBar';
-import { getOpenAIProviderStats, getStatsBySource } from '../utils';
+import { getOpenAIProviderStats, getStatsBySource, normalizePriority } from '../utils';
 import type { OpenAIFormState } from '../types';
 import { OpenAIModal } from './OpenAIModal';
 
@@ -125,6 +125,12 @@ export function OpenAISection({
                 <div className={styles.fieldRow}>
                   <span className={styles.fieldLabel}>{t('common.base_url')}:</span>
                   <span className={styles.fieldValue}>{item.baseUrl}</span>
+                </div>
+                <div className={styles.fieldRow}>
+                  <span className={styles.fieldLabel}>
+                    {t('common.priority', { defaultValue: '优先级' })}:
+                  </span>
+                  <span className={styles.fieldValue}>{normalizePriority(item.priority)}</span>
                 </div>
                 {headerEntries.length > 0 && (
                   <div className={styles.headerBadgeList}>

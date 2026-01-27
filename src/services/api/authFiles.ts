@@ -8,6 +8,7 @@ import type { OAuthModelMappingEntry } from '@/types';
 
 type StatusError = { status?: number };
 type AuthFileStatusResponse = { status: string; disabled: boolean };
+type AuthFilePriorityResponse = { status: string; priority: number };
 
 const getStatusCode = (err: unknown): number | undefined => {
   if (!err || typeof err !== 'object') return undefined;
@@ -109,6 +110,9 @@ export const authFilesApi = {
 
   setStatus: (name: string, disabled: boolean) =>
     apiClient.patch<AuthFileStatusResponse>('/auth-files/status', { name, disabled }),
+
+  setPriority: (name: string, priority: number) =>
+    apiClient.patch<AuthFilePriorityResponse>('/auth-files/priority', { name, priority }),
 
   upload: (file: File) => {
     const formData = new FormData();
