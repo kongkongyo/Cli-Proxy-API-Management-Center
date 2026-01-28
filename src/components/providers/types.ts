@@ -20,6 +20,7 @@ export interface OpenAIFormState {
   prefix: string;
   baseUrl: string;
   headers: HeaderEntry[];
+  priority?: number;
   testModel?: string;
   modelEntries: ModelEntry[];
   apiKeyEntries: ApiKeyEntry[];
