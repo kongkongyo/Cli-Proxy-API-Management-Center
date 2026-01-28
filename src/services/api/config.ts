@@ -109,21 +109,7 @@ export const configApi = {
   },
 
   /**
-   * 获取路由偏好（优先供应商 / 优先认证）
-   */
-  async getRoutingPreference(): Promise<string> {
-    const data = await apiClient.get('/routing/preference');
-    return data?.preference ?? data?.['routing-preference'] ?? data?.routingPreference ?? '';
-  },
-
-  /**
    * 更新路由策略
    */
   updateRoutingStrategy: (strategy: string) => apiClient.put('/routing/strategy', { value: strategy }),
-
-  /**
-   * 更新路由偏好（优先供应商 / 优先认证）
-   */
-  updateRoutingPreference: (preference: string) =>
-    apiClient.put('/routing/preference', { value: preference }),
 };
