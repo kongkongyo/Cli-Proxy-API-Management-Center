@@ -16,7 +16,9 @@ import type {
   CodexUsagePayload,
   GeminiCliParsedBucket,
   GeminiCliQuotaBucketState,
-  GeminiCliQuotaState
+  GeminiCliQuotaState,
+  GithubCopilotQuotaState,
+  GithubCopilotTokenPayload
 } from '@/types';
 import { apiCallApi, authFilesApi, getApiCallErrorMessage } from '@/services/api';
 import {
@@ -26,6 +28,8 @@ import {
   CODEX_REQUEST_HEADERS,
   GEMINI_CLI_QUOTA_URL,
   GEMINI_CLI_REQUEST_HEADERS,
+  GITHUB_COPILOT_USAGE_URL,
+  GITHUB_COPILOT_REQUEST_HEADERS,
   normalizeAuthIndexValue,
   normalizeNumberValue,
   normalizePlanType,
@@ -34,6 +38,7 @@ import {
   parseAntigravityPayload,
   parseCodexUsagePayload,
   parseGeminiCliQuotaPayload,
+  parseGithubCopilotTokenPayload,
   resolveCodexChatgptAccountId,
   resolveCodexPlanType,
   resolveGeminiCliProjectId,
@@ -46,6 +51,7 @@ import {
   isAntigravityFile,
   isCodexFile,
   isGeminiCliFile,
+  isGithubCopilotFile,
   isRuntimeOnlyAuthFile
 } from '@/utils/quota';
 import type { QuotaRenderHelpers } from './QuotaCard';
@@ -53,7 +59,7 @@ import styles from '@/pages/QuotaPage.module.scss';
 
 type QuotaUpdater<T> = T | ((prev: T) => T);
 
-type QuotaType = 'antigravity' | 'codex' | 'gemini-cli';
+type QuotaType = 'antigravity' | 'codex' | 'gemini-cli' | 'github-copilot';
 
 const DEFAULT_ANTIGRAVITY_PROJECT_ID = 'bamboo-precept-lgxtn';
 
@@ -61,9 +67,11 @@ export interface QuotaStore {
   antigravityQuota: Record<string, AntigravityQuotaState>;
   codexQuota: Record<string, CodexQuotaState>;
   geminiCliQuota: Record<string, GeminiCliQuotaState>;
+  githubCopilotQuota: Record<string, GithubCopilotQuotaState>;
   setAntigravityQuota: (updater: QuotaUpdater<Record<string, AntigravityQuotaState>>) => void;
   setCodexQuota: (updater: QuotaUpdater<Record<string, CodexQuotaState>>) => void;
   setGeminiCliQuota: (updater: QuotaUpdater<Record<string, GeminiCliQuotaState>>) => void;
+  setGithubCopilotQuota: (updater: QuotaUpdater<Record<string, GithubCopilotQuotaState>>) => void;
   clearQuotaCache: () => void;
 }
 
@@ -355,6 +363,56 @@ const fetchGeminiCliQuota = async (
   return buildGeminiCliQuotaBuckets(parsedBuckets);
 };
 
+const fetchGithubCopilotQuota = async (
+  file: AuthFileItem,
+  t: TFunction
+): Promise<{
+  expiresAt: number | null;
+  refreshIn: number | null;
+  chatQuota: number | null;
+  completionsQuota: number | null;
+  quotaResetDate: number | null;
+  sku: string | null;
+}> => {
+  const rawAuthIndex = file['auth_index'] ?? file.authIndex;
+  const authIndex = normalizeAuthIndexValue(rawAuthIndex);
+  if (!authIndex) {
+    throw new Error(t('github_copilot_quota.missing_auth_index'));
+  }
+
+  const result = await apiCallApi.request({
+    authIndex,
+    method: 'GET',
+    url: GITHUB_COPILOT_USAGE_URL,
+    header: { ...GITHUB_COPILOT_REQUEST_HEADERS }
+  });
+
+  if (result.statusCode < 200 || result.statusCode >= 300) {
+    throw createStatusError(getApiCallErrorMessage(result), result.statusCode);
+  }
+
+  const payload = parseGithubCopilotTokenPayload(result.body ?? result.bodyText);
+  if (!payload) {
+    throw new Error(t('github_copilot_quota.invalid_response'));
+  }
+
+  const expiresAt = normalizeNumberValue(payload.expires_at ?? payload.expiresAt);
+  const refreshIn = normalizeNumberValue(payload.refresh_in ?? payload.refreshIn);
+  
+  // Extract quota limits
+  const quotas = payload.limited_user_quotas ?? payload.limitedUserQuotas;
+  const chatQuota = quotas ? normalizeNumberValue(quotas.chat) : null;
+  const completionsQuota = quotas ? normalizeNumberValue(quotas.completions) : null;
+  
+  // Extract reset date and SKU
+  const quotaResetDate = normalizeNumberValue(
+    payload.limited_user_reset_date ?? payload.limitedUserResetDate
+  );
+  const sku = normalizeStringValue(payload.sku);
+
+  return { expiresAt, refreshIn, chatQuota, completionsQuota, quotaResetDate, sku };
+};
+
 const renderAntigravityItems = (
   quota: AntigravityQuotaState,
   t: TFunction,
@@ -530,6 +588,145 @@ const renderGeminiCliItems = (
   });
 };
 
+const renderGithubCopilotItems = (
+  quota: GithubCopilotQuotaState,
+  t: TFunction,
+  helpers: QuotaRenderHelpers
+): ReactNode => {
+  const { styles: styleMap, QuotaProgressBar } = helpers;
+  const { createElement: h, Fragment } = React;
+
+  const {
+    expiresAt,
+    refreshIn,
+    chatQuota,
+    completionsQuota,
+    quotaResetDate,
+    sku
+  } = quota;
+
+  // Check if we have any data to display
+  const hasData =
+    expiresAt !== null ||
+    refreshIn !== null ||
+    chatQuota !== null ||
+    completionsQuota !== null ||
+    quotaResetDate !== null ||
+    sku !== null;
+
+  if (!hasData) {
+    return h(
+      'div',
+      { className: styleMap.quotaMessage },
+      t('github_copilot_quota.no_data')
+    );
+  }
+
+  const formatTimestamp = (timestamp: number): string => {
+    try {
+      const date = new Date(timestamp * 1000);
+      return date.toLocaleString();
+    } catch {
+      return '-';
+    }
+  };
+
+  const formatDuration = (seconds: number): string => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    if (hours > 0) {
+      return t('github_copilot_quota.duration_hours', { hours, minutes });
+    }
+    return t('github_copilot_quota.duration_minutes', { minutes });
+  };
+
+  const getPlanLabel = (skuValue?: string | null): string => {
+    if (!skuValue) return t('github_copilot_quota.plan_unknown');
+    const normalized = skuValue.toLowerCase();
+    if (normalized.includes('free')) return t('github_copilot_quota.plan_free_limited');
+    if (normalized.includes('business')) return t('github_copilot_quota.plan_business');
+    if (normalized.includes('enterprise')) return t('github_copilot_quota.plan_enterprise');
+    if (normalized.includes('individual')) return t('github_copilot_quota.plan_individual');
+    return skuValue;
+  };
+
+  const nodes: ReactNode[] = [];
+
+  // Display SKU/Plan badge if available
+  if (sku) {
+    nodes.push(
+      h(
+        'div',
+        { key: 'plan', className: styleMap.codexPlan },
+        h('span', { className: styleMap.codexPlanLabel }, t('github_copilot_quota.plan_label')),
+        h('span', { className: styleMap.codexPlanValue }, getPlanLabel(sku))
+      )
+    );
+  }
+
+  // Display Chat Quota with limit and progress bar
+  if (chatQuota !== null) {
+    const resetLabel = quotaResetDate !== null
+      ? new Date(quotaResetDate * 1000).toLocaleString(undefined, {
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit'
+        })
+      : '-';
+    nodes.push(
+      h(
+        'div',
+        { key: 'chat-quota', className: styleMap.quotaRow },
+        h(
+          'div',
+          { className: styleMap.quotaRowHeader },
+          h('span', { className: styleMap.quotaModel }, t('github_copilot_quota.chat_quota')),
+          h(
+            'div',
+            { className: styleMap.quotaMeta },
+            h('span', { className: styleMap.quotaPercent }, '100%'),
+            h('span', { className: styleMap.quotaReset }, resetLabel)
+          )
+        ),
+        h(QuotaProgressBar, { percent: 100, highThreshold: 80, mediumThreshold: 50 })
+      )
+    );
+  }
+
+  // Display Completions Quota with limit and progress bar
+  if (completionsQuota !== null) {
+    const resetLabel = quotaResetDate !== null
+      ? new Date(quotaResetDate * 1000).toLocaleString(undefined, {
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit'
+        })
+      : '-';
+    nodes.push(
+      h(
+        'div',
+        { key: 'completions-quota', className: styleMap.quotaRow },
+        h(
+          'div',
+          { className: styleMap.quotaRowHeader },
+          h('span', { className: styleMap.quotaModel }, t('github_copilot_quota.completions_quota')),
+          h(
+            'div',
+            { className: styleMap.quotaMeta },
+            h('span', { className: styleMap.quotaPercent }, '100%'),
+            h('span', { className: styleMap.quotaReset }, resetLabel)
+          )
+        ),
+        h(QuotaProgressBar, { percent: 100, highThreshold: 80, mediumThreshold: 50 })
+      )
+    );
+  }
+
+  return h(Fragment, null, ...nodes);
+};
+
 export const ANTIGRAVITY_CONFIG: QuotaConfig<AntigravityQuotaState, AntigravityQuotaGroup[]> = {
   type: 'antigravity',
   i18nPrefix: 'antigravity_quota',
@@ -601,4 +798,57 @@ export const GEMINI_CLI_CONFIG: QuotaConfig<GeminiCliQuotaState, GeminiCliQuotaB
   controlClassName: styles.geminiCliControl,
   gridClassName: styles.geminiCliGrid,
   renderQuotaItems: renderGeminiCliItems
+};
+
+export const GITHUB_COPILOT_CONFIG: QuotaConfig<
+  GithubCopilotQuotaState,
+  {
+    expiresAt: number | null;
+    refreshIn: number | null;
+    chatQuota: number | null;
+    completionsQuota: number | null;
+    quotaResetDate: number | null;
+    sku: string | null;
+  }
+> = {
+  type: 'github-copilot',
+  i18nPrefix: 'github_copilot_quota',
+  filterFn: (file) => isGithubCopilotFile(file),
+  fetchQuota: fetchGithubCopilotQuota,
+  storeSelector: (state) => state.githubCopilotQuota,
+  storeSetter: 'setGithubCopilotQuota',
+  buildLoadingState: () => ({
+    status: 'loading',
+    expiresAt: null,
+    refreshIn: null,
+    chatQuota: null,
+    completionsQuota: null,
+    quotaResetDate: null,
+    sku: null
+  }),
+  buildSuccessState: (data) => ({
+    status: 'success',
+    expiresAt: data.expiresAt,
+    refreshIn: data.refreshIn,
+    chatQuota: data.chatQuota,
+    completionsQuota: data.completionsQuota,
+    quotaResetDate: data.quotaResetDate,
+    sku: data.sku
+  }),
+  buildErrorState: (message, status) => ({
+    status: 'error',
+    expiresAt: null,
+    refreshIn: null,
+    chatQuota: null,
+    completionsQuota: null,
+    quotaResetDate: null,
+    sku: null,
+    error: message,
+    errorStatus: status
+  }),
+  cardClassName: styles.githubCopilotCard,
+  controlsClassName: styles.githubCopilotControls,
+  controlClassName: styles.githubCopilotControl,
+  gridClassName: styles.githubCopilotGrid,
+  renderQuotaItems: renderGithubCopilotItems
 };

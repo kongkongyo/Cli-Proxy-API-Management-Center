@@ -11,7 +11,8 @@ import {
   QuotaSection,
   ANTIGRAVITY_CONFIG,
   CODEX_CONFIG,
-  GEMINI_CLI_CONFIG
+  GEMINI_CLI_CONFIG,
+  GITHUB_COPILOT_CONFIG
 } from '@/components/quota';
 import type { AuthFileItem } from '@/types';
 import styles from './QuotaPage.module.scss';
@@ -83,6 +84,12 @@ export function QuotaPage() {
       />
       <QuotaSection
         config={GEMINI_CLI_CONFIG}
+        files={files}
+        loading={loading}
+        disabled={disableControls}
+      />
+      <QuotaSection
+        config={GITHUB_COPILOT_CONFIG}
         files={files}
         loading={loading}
         disabled={disableControls}

@@ -149,3 +149,12 @@ export const CODEX_REQUEST_HEADERS = {
   'Content-Type': 'application/json',
   'User-Agent': 'codex_cli_rs/0.76.0 (Debian 13.0.0; x86_64) WindowsTerminal',
 };
+
+// GitHub Copilot API configuration
+export const GITHUB_COPILOT_USAGE_URL = 'https://api.github.com/copilot_internal/v2/token';
+
+export const GITHUB_COPILOT_REQUEST_HEADERS = {
+  Authorization: 'Bearer $TOKEN$',
+  'Content-Type': 'application/json',
+  'User-Agent': 'github-copilot-cli/0.1.0',
+};
