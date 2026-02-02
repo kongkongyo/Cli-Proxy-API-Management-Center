@@ -7,9 +7,11 @@ export interface ModelInfo {
   name: string;
   alias?: string;
   description?: string;
+  owner?: string;
 }
 
 const MODEL_CATEGORIES = [
+  { id: 'copilot', label: 'Copilot', patterns: [/copilot/i] },
   { id: 'gpt', label: 'GPT', patterns: [/gpt/i, /\bo\d\b/i, /\bo\d+\.?/i, /\bchatgpt/i] },
   { id: 'claude', label: 'Claude', patterns: [/claude/i] },
   { id: 'gemini', label: 'Gemini', patterns: [/gemini/i, /\bgai\b/i] },
@@ -42,12 +44,16 @@ export function normalizeModelList(payload: any, { dedupe = false } = {}): Model
 
     const alias = entry.alias || entry.display_name || entry.displayName;
     const description = entry.description || entry.note || entry.comment;
+    const owner = entry.owned_by || entry.ownedBy || entry.owner;
     const model: ModelInfo = { name: String(name) };
     if (alias && alias !== name) {
       model.alias = String(alias);
     }
     if (description) {
       model.description = String(description);
+    }
+    if (owner) {
+      model.owner = String(owner);
     }
     return model;
   };
@@ -98,7 +104,8 @@ export function classifyModels(models: ModelInfo[] = [], { otherLabel = 'Other' 
   models.forEach((model) => {
     const name = (model?.name || '').toString();
     const alias = (model?.alias || '').toString();
-    const haystack = `${name} ${alias}`.toLowerCase();
+    const owner = (model?.owner || '').toString();
+    const haystack = `${name} ${alias} ${owner}`.toLowerCase();
     const matchedId = matchCategory(haystack);
     const target = matchedId ? groups.find((group) => group.id === matchedId) : null;
 

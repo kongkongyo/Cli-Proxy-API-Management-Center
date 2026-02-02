@@ -386,6 +386,7 @@ const fetchGithubCopilotQuota = async (
     header: { ...GITHUB_COPILOT_REQUEST_HEADERS }
   });
 
+  // console.log('Github Copilot quota API result:', result);
   if (result.statusCode < 200 || result.statusCode >= 300) {
     throw createStatusError(getApiCallErrorMessage(result), result.statusCode);
   }
@@ -407,7 +408,18 @@ const fetchGithubCopilotQuota = async (
   const quotaResetDate = normalizeNumberValue(
     payload.limited_user_reset_date ?? payload.limitedUserResetDate
   );
-  const sku = normalizeStringValue(payload.sku);
+  const sku = normalizeStringValue(
+    payload.sku ??
+      payload.plan ??
+      payload.plan_type ??
+      payload.planType ??
+      payload.subscription ??
+      payload.subscription_type ??
+      payload.subscriptionType ??
+      payload.license ??
+      payload.license_type ??
+      payload.licenseType
+  );
 
   return { expiresAt, refreshIn, chatQuota, completionsQuota, quotaResetDate, sku };
 };
@@ -624,10 +636,16 @@ const renderGithubCopilotItems = (
   const getPlanLabel = (skuValue?: string | null): string => {
     if (!skuValue) return t('github_copilot_quota.plan_unknown');
     const normalized = skuValue.toLowerCase();
-    if (normalized.includes('free')) return t('github_copilot_quota.plan_free_limited');
-    if (normalized.includes('business')) return t('github_copilot_quota.plan_business');
     if (normalized.includes('enterprise')) return t('github_copilot_quota.plan_enterprise');
-    if (normalized.includes('individual')) return t('github_copilot_quota.plan_individual');
+    if (normalized.includes('business') || normalized.includes('team')) {
+      return t('github_copilot_quota.plan_business');
+    }
+    if (normalized.includes('individual') || normalized.includes('personal') || normalized.includes('pro')) {
+      return t('github_copilot_quota.plan_individual');
+    }
+    if (normalized.includes('free') || normalized.includes('trial')) {
+      return t('github_copilot_quota.plan_free_limited');
+    }
     return skuValue;
   };
 

@@ -2000,6 +2000,7 @@ export function AuthFilesPage() {
         open={mappingModalOpen}
         onClose={() => setMappingModalOpen(false)}
         title={t('oauth_model_alias.add_title')}
+        width={860}
         footer={
           <>
             <Button
