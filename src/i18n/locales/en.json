@@ -176,7 +176,11 @@
     "add_modal_key_placeholder": "Please enter API key",
     "edit_modal_title": "Edit API Key",
     "edit_modal_key_label": "API Key:",
-    "delete_confirm": "Are you sure you want to delete this API key?"
+    "delete_confirm": "Are you sure you want to delete this API key?",
+    "limit_label": "Spending Limit (Optional)",
+    "limit_placeholder": "e.g., 100.00",
+    "limit_hint": "Optional dollar spending limit for this API key. Leave empty for no limit.",
+    "limit_invalid": "Spending limit must be a valid positive number"
   },
   "ai_providers": {
     "title": "AI Providers Configuration",
@@ -488,6 +492,35 @@
     "total_credits_label": "Total Credits",
     "remaining_credits": "Remaining {{count}}"
   },
+  "github_copilot_quota": {
+    "title": "GitHub Copilot Quota",
+    "empty_title": "No GitHub Copilot Auth Files",
+    "empty_desc": "Upload a GitHub Copilot credential to view quota information.",
+    "idle": "Not loaded. Click Refresh Button.",
+    "loading": "Loading quota...",
+    "load_failed": "Failed to load quota: {{message}}",
+    "missing_auth_index": "Auth file missing auth_index",
+    "invalid_response": "Invalid response from GitHub Copilot API",
+    "no_data": "No quota data available",
+    "empty_data": "No quota data available",
+    "refresh_button": "Refresh Quota",
+    "fetch_all": "Fetch All",
+    "plan_label": "Plan",
+    "plan_free_limited": "Free Limited",
+    "plan_business": "Business",
+    "plan_enterprise": "Enterprise",
+    "plan_individual": "Individual",
+    "plan_unknown": "Unknown",
+    "chat_quota": "Chat Quota",
+    "completions_quota": "Completions Quota",
+    "premium_quota": "Premium Interactions",
+    "limit_label": "Limit: {{limit}}",
+    "quota_reset_date": "Quota Resets",
+    "expires_at": "Token Expires At",
+    "refresh_in": "Refresh In",
+    "duration_hours": "{{hours}}h {{minutes}}m",
+    "duration_minutes": "{{minutes}}m"
+  },
   "vertex_import": {
     "title": "Vertex JSON Login",
     "description": "Upload a Google service account JSON to store it as auth-dir/vertex-<project>.json using the same rules as the CLI vertex-import helper.",
@@ -694,7 +727,18 @@
     "kiro_token_import_button": "Import Token",
     "kiro_token_required": "Please enter refreshToken first",
     "kiro_token_import_success": "Kiro Token imported successfully",
-    "kiro_token_import_error": "Kiro Token import failed:"
+    "kiro_token_import_error": "Kiro Token import failed:",
+    "device_code_label": "Device Code:",
+    "copy_code": "Copy Code",
+    "github_copilot_oauth_title": "GitHub Copilot OAuth",
+    "github_copilot_oauth_hint": "Authenticate with GitHub Copilot using device code flow. Visit the URL and enter the code provided.",
+    "github_copilot_oauth_url_label": "Authentication URL:",
+    "github_copilot_copy_link": "Copy Link",
+    "github_copilot_open_link": "Open in Browser",
+    "github_copilot_oauth_status_success": "GitHub Copilot authentication successful!",
+    "github_copilot_oauth_status_error": "GitHub Copilot authentication failed:",
+    "github_copilot_oauth_status_waiting": "Waiting for GitHub authorization...",
+    "github_copilot_oauth_start_error": "Failed to start GitHub Copilot authentication:"
   },
   "usage_stats": {
     "title": "Usage Statistics",

@@ -105,7 +105,8 @@
 .antigravityGrid,
 .codexGrid,
 .geminiCliGrid,
-.kiroGrid {
+.kiroGrid,
+.githubCopilotGrid {
   display: grid;
   gap: $spacing-md;
   grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
@@ -118,7 +119,8 @@
 .antigravityControls,
 .codexControls,
 .geminiCliControls,
-.kiroControls {
+.kiroControls,
+.githubCopilotControls {
   display: flex;
   gap: $spacing-md;
   flex-wrap: wrap;
@@ -129,7 +131,8 @@
 .antigravityControl,
 .codexControl,
 .geminiCliControl,
-.kiroControl {
+.kiroControl,
+.githubCopilotControl {
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -170,6 +173,12 @@
   background-image: linear-gradient(180deg,
       rgba(255, 248, 225, 0.18),
       rgba(255, 248, 225, 0));
+}
+
+.githubCopilotCard {
+  background-image: linear-gradient(180deg,
+      rgba(240, 240, 240, 0.15),
+      rgba(240, 240, 240, 0));
 }
 
 .quotaSection {

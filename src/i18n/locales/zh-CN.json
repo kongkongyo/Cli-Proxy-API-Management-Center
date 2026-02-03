@@ -176,7 +176,11 @@
     "add_modal_key_placeholder": "请输入API密钥",
     "edit_modal_title": "编辑API密钥",
     "edit_modal_key_label": "API密钥:",
-    "delete_confirm": "确定要删除这个API密钥吗？"
+    "delete_confirm": "确定要删除这个API密钥吗？",
+    "limit_label": "消费限额（可选）",
+    "limit_placeholder": "例如：100.00",
+    "limit_hint": "为此 API 密钥设置美元消费上限。留空表示无限额。",
+    "limit_invalid": "请输入有效的正数"
   },
   "ai_providers": {
     "title": "AI 提供商配置",
@@ -488,6 +492,35 @@
     "total_credits_label": "合计额度",
     "remaining_credits": "剩余 {{count}}"
   },
+  "github_copilot_quota": {
+    "title": "GitHub Copilot 额度",
+    "empty_title": "暂无 GitHub Copilot 认证",
+    "empty_desc": "上传 GitHub Copilot 认证文件后即可查看额度信息。",
+    "idle": "尚未加载额度，请点击刷新按钮。",
+    "loading": "正在加载额度...",
+    "load_failed": "额度获取失败：{{message}}",
+    "missing_auth_index": "认证文件缺少 auth_index",
+    "invalid_response": "GitHub Copilot API 返回无效响应",
+    "no_data": "暂无额度数据",
+    "empty_data": "暂无额度数据",
+    "refresh_button": "刷新额度",
+    "fetch_all": "获取全部",
+    "plan_label": "套餐",
+    "plan_free_limited": "免费限额",
+    "plan_business": "商业版",
+    "plan_enterprise": "企业版",
+    "plan_individual": "个人版",
+    "plan_unknown": "未知",
+    "chat_quota": "聊天额度",
+    "completions_quota": "代码补全额度",
+    "premium_quota": "高级交互额度",
+    "limit_label": "限额: {{limit}}",
+    "quota_reset_date": "额度重置时间",
+    "expires_at": "Token 过期时间",
+    "refresh_in": "刷新间隔",
+    "duration_hours": "{{hours}}小时 {{minutes}}分钟",
+    "duration_minutes": "{{minutes}}分钟"
+  },
   "vertex_import": {
     "title": "Vertex JSON 登录",
     "description": "上传 Google 服务账号 JSON，使用 CLI vertex-import 同步规则写入 auth-dir/vertex-<project>.json。",
@@ -694,7 +727,18 @@
     "kiro_token_import_button": "导入 Token",
     "kiro_token_required": "请先填写 refreshToken",
     "kiro_token_import_success": "Kiro Token 导入成功",
-    "kiro_token_import_error": "Kiro Token 导入失败:"
+    "kiro_token_import_error": "Kiro Token 导入失败:",
+    "device_code_label": "设备代码：",
+    "copy_code": "复制代码",
+    "github_copilot_oauth_title": "GitHub Copilot OAuth",
+    "github_copilot_oauth_hint": "使用设备代码流程进行 GitHub Copilot 身份验证。访问 URL 并输入提供的代码。",
+    "github_copilot_oauth_url_label": "认证 URL：",
+    "github_copilot_copy_link": "复制链接",
+    "github_copilot_open_link": "在浏览器中打开",
+    "github_copilot_oauth_status_success": "GitHub Copilot 认证成功！",
+    "github_copilot_oauth_status_error": "GitHub Copilot 认证失败：",
+    "github_copilot_oauth_status_waiting": "等待 GitHub 授权中...",
+    "github_copilot_oauth_start_error": "启动 GitHub Copilot 认证失败："
   },
   "usage_stats": {
     "title": "使用统计",

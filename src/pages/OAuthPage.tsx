@@ -16,10 +16,12 @@ import iconQwen from '@/assets/icons/qwen.svg';
 import iconIflow from '@/assets/icons/iflow.svg';
 import iconVertex from '@/assets/icons/vertex.svg';
 import iconKiro from '@/assets/icons/kiro.svg';
+import iconGithubCopilot from '@/assets/icons/github-copilot-white.svg';
 
 interface ProviderState {
   url?: string;
   state?: string;
+  userCode?: string;
   status?: 'idle' | 'waiting' | 'success' | 'error';
   error?: string;
   polling?: boolean;
@@ -73,7 +75,8 @@ const PROVIDERS: { id: OAuthProvider; titleKey: string; hintKey: string; urlLabe
   { id: 'anthropic', titleKey: 'auth_login.anthropic_oauth_title', hintKey: 'auth_login.anthropic_oauth_hint', urlLabelKey: 'auth_login.anthropic_oauth_url_label', icon: iconClaude },
   { id: 'antigravity', titleKey: 'auth_login.antigravity_oauth_title', hintKey: 'auth_login.antigravity_oauth_hint', urlLabelKey: 'auth_login.antigravity_oauth_url_label', icon: iconAntigravity },
   { id: 'gemini-cli', titleKey: 'auth_login.gemini_cli_oauth_title', hintKey: 'auth_login.gemini_cli_oauth_hint', urlLabelKey: 'auth_login.gemini_cli_oauth_url_label', icon: iconGemini },
-  { id: 'qwen', titleKey: 'auth_login.qwen_oauth_title', hintKey: 'auth_login.qwen_oauth_hint', urlLabelKey: 'auth_login.qwen_oauth_url_label', icon: iconQwen }
+  { id: 'qwen', titleKey: 'auth_login.qwen_oauth_title', hintKey: 'auth_login.qwen_oauth_hint', urlLabelKey: 'auth_login.qwen_oauth_url_label', icon: iconQwen },
+  { id: 'github-copilot', titleKey: 'auth_login.github_copilot_oauth_title', hintKey: 'auth_login.github_copilot_oauth_hint', urlLabelKey: 'auth_login.github_copilot_oauth_url_label', icon: iconGithubCopilot }
 ];
 
 const CALLBACK_SUPPORTED: OAuthProvider[] = ['codex', 'anthropic', 'antigravity', 'gemini-cli'];
@@ -175,7 +178,13 @@ export function OAuthPage() {
         provider,
         provider === 'gemini-cli' ? { projectId: projectId || undefined } : undefined
       );
-      updateProviderState(provider, { url: res.url, state: res.state, status: 'waiting', polling: true });
+      updateProviderState(provider, {
+        url: res.url,
+        state: res.state,
+        userCode: res.user_code,
+        status: 'waiting',
+        polling: true
+      });
       if (res.state) {
         startPolling(provider, res.state);
       }
@@ -417,6 +426,16 @@ export function OAuthPage() {
                   <div className={`connection-box ${styles.authUrlBox}`}>
                     <div className={styles.authUrlLabel}>{t(provider.urlLabelKey)}</div>
                     <div className={styles.authUrlValue}>{state.url}</div>
+                    {state.userCode && (
+                      <div style={{ marginTop: 12 }}>
+                        <div className={styles.authUrlLabel}>
+                          {t('auth_login.device_code_label', { defaultValue: 'Device Code:' })}
+                        </div>
+                        <div className={styles.authUrlValue} style={{ fontSize: '1.5em', fontWeight: 'bold', letterSpacing: '0.1em' }}>
+                          {state.userCode}
+                        </div>
+                      </div>
+                    )}
                     <div className={styles.authUrlActions}>
                       <Button variant="secondary" size="sm" onClick={() => copyLink(state.url!)}>
                         {t(getAuthKey(provider.id, 'copy_link'))}
@@ -428,6 +447,11 @@ export function OAuthPage() {
                       >
                         {t(getAuthKey(provider.id, 'open_link'))}
                       </Button>
+                      {state.userCode && (
+                        <Button variant="secondary" size="sm" onClick={() => copyLink(state.userCode!)}>
+                          {t('auth_login.copy_code', { defaultValue: 'Copy Code' })}
+                        </Button>
+                      )}
                     </div>
                   </div>
                 )}

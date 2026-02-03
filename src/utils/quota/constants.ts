@@ -165,3 +165,12 @@ export const KIRO_REQUEST_HEADERS = {
   'amz-sdk-request': 'attempt=1; max=1',
   Connection: 'close',
 };
+
+// GitHub Copilot API configuration
+export const GITHUB_COPILOT_USAGE_URL = 'https://api.github.com/copilot_internal/v2/token';
+
+export const GITHUB_COPILOT_REQUEST_HEADERS = {
+  Authorization: 'Bearer $TOKEN$',
+  'Content-Type': 'application/json',
+  'User-Agent': 'github-copilot-cli/0.1.0',
+};

@@ -200,3 +200,42 @@ export interface KiroQuotaState {
   error?: string;
   errorStatus?: number;
 }
+
+// GitHub Copilot types
+export interface GithubCopilotLimitedUserQuotas {
+  chat?: number | string;
+  completions?: number | string;
+}
+
+export interface GithubCopilotTokenPayload {
+  expires_at?: number | string;
+  expiresAt?: number | string;
+  refresh_in?: number | string;
+  refreshIn?: number | string;
+  token?: string;
+  limited_user_quotas?: GithubCopilotLimitedUserQuotas;
+  limitedUserQuotas?: GithubCopilotLimitedUserQuotas;
+  limited_user_reset_date?: number | string;
+  limitedUserResetDate?: number | string;
+  sku?: string;
+  [key: string]: unknown;
+}
+
+export interface GithubCopilotQuotaState {
+  status: 'idle' | 'loading' | 'success' | 'error';
+  expiresAt: number | null;
+  refreshIn: number | null;
+  chatQuota: number | null;
+  chatPercent: number | null;
+  chatUnlimited: boolean;
+  completionsQuota: number | null;
+  completionsPercent: number | null;
+  completionsUnlimited: boolean;
+  premiumQuota: number | null;
+  premiumPercent: number | null;
+  premiumEntitlement: number | null;
+  quotaResetDate: number | null;
+  sku: string | null;
+  error?: string;
+  errorStatus?: number;
+}

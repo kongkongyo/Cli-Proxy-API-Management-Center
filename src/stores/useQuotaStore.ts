@@ -3,7 +3,7 @@
  */
 
 import { create } from 'zustand';
-import type { AntigravityQuotaState, CodexQuotaState, GeminiCliQuotaState, KiroQuotaState } from '@/types';
+import type { GithubCopilotQuotaState, AntigravityQuotaState, CodexQuotaState, GeminiCliQuotaState, KiroQuotaState } from '@/types';
 
 type QuotaUpdater<T> = T | ((prev: T) => T);
 
@@ -12,10 +12,12 @@ interface QuotaStoreState {
   codexQuota: Record<string, CodexQuotaState>;
   geminiCliQuota: Record<string, GeminiCliQuotaState>;
   kiroQuota: Record<string, KiroQuotaState>;
+  githubCopilotQuota: Record<string, GithubCopilotQuotaState>;
   setAntigravityQuota: (updater: QuotaUpdater<Record<string, AntigravityQuotaState>>) => void;
   setCodexQuota: (updater: QuotaUpdater<Record<string, CodexQuotaState>>) => void;
   setGeminiCliQuota: (updater: QuotaUpdater<Record<string, GeminiCliQuotaState>>) => void;
   setKiroQuota: (updater: QuotaUpdater<Record<string, KiroQuotaState>>) => void;
+  setGithubCopilotQuota: (updater: QuotaUpdater<Record<string, GithubCopilotQuotaState>>) => void;
   clearQuotaCache: () => void;
 }
 
@@ -31,6 +33,7 @@ export const useQuotaStore = create<QuotaStoreState>((set) => ({
   codexQuota: {},
   geminiCliQuota: {},
   kiroQuota: {},
+  githubCopilotQuota: {},
   setAntigravityQuota: (updater) =>
     set((state) => ({
       antigravityQuota: resolveUpdater(updater, state.antigravityQuota)
@@ -47,11 +50,16 @@ export const useQuotaStore = create<QuotaStoreState>((set) => ({
     set((state) => ({
       kiroQuota: resolveUpdater(updater, state.kiroQuota)
     })),
+  setGithubCopilotQuota: (updater) =>
+    set((state) => ({
+      githubCopilotQuota: resolveUpdater(updater, state.githubCopilotQuota)
+    })),
   clearQuotaCache: () =>
     set({
       antigravityQuota: {},
       codexQuota: {},
       geminiCliQuota: {},
-      kiroQuota: {}
+      kiroQuota: {},
+      githubCopilotQuota: {}
     })
 }));
