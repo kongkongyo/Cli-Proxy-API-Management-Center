@@ -727,8 +727,7 @@
     "kiro_token_import_button": "导入 Token",
     "kiro_token_required": "请先填写 refreshToken",
     "kiro_token_import_success": "Kiro Token 导入成功",
-    "kiro_token_import_error": "Kiro Token 导入失败:"
-    "remote_access_disabled": "远程访问不支持此登录方式，请从本地 (localhost) 访问",
+    "kiro_token_import_error": "Kiro Token 导入失败:",
     "device_code_label": "设备代码：",
     "copy_code": "复制代码",
     "github_copilot_oauth_title": "GitHub Copilot OAuth",

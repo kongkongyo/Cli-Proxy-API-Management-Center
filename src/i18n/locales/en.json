@@ -727,8 +727,7 @@
     "kiro_token_import_button": "Import Token",
     "kiro_token_required": "Please enter refreshToken first",
     "kiro_token_import_success": "Kiro Token imported successfully",
-    "kiro_token_import_error": "Kiro Token import failed:"
-    "remote_access_disabled": "This login method is not available for remote access. Please access from localhost.",
+    "kiro_token_import_error": "Kiro Token import failed:",
     "device_code_label": "Device Code:",
     "copy_code": "Copy Code",
     "github_copilot_oauth_title": "GitHub Copilot OAuth",
