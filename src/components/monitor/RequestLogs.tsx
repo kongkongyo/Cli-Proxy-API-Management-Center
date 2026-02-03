@@ -135,8 +135,13 @@ export function RequestLogs({ data, loading: parentLoading, providerMap, provide
       const files = response?.files || [];
       const map: Record<string, string> = {};
       files.forEach((file) => {
-        if (file.authIndex !== undefined && file.authIndex !== null) {
-          map[String(file.authIndex)] = file.name;
+        // 兼容 auth_index 和 authIndex 两种字段名（API 返回的是 auth_index）
+        const rawAuthIndex = (file as Record<string, unknown>)['auth_index'] ?? file.authIndex;
+        if (rawAuthIndex !== undefined && rawAuthIndex !== null) {
+          const authIndexKey = String(rawAuthIndex).trim();
+          if (authIndexKey) {
+            map[authIndexKey] = file.name;
+          }
         }
       });
       setAuthIndexMap(map);
