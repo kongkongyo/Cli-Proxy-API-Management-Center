@@ -15,6 +15,7 @@ import iconGemini from '@/assets/icons/gemini.svg';
 import iconQwen from '@/assets/icons/qwen.svg';
 import iconIflow from '@/assets/icons/iflow.svg';
 import iconVertex from '@/assets/icons/vertex.svg';
+import iconKiro from '@/assets/icons/kiro.svg';
 
 interface ProviderState {
   url?: string;
@@ -54,6 +55,19 @@ interface VertexImportState {
   result?: VertexImportResult;
 }
 
+interface KiroOAuthState {
+  method: 'builder-id' | 'idc' | null;
+  startUrl: string;
+  region: string;
+}
+
+interface KiroTokenImportState {
+  token: string;
+  loading: boolean;
+  error?: string;
+  success?: boolean;
+}
+
 const PROVIDERS: { id: OAuthProvider; titleKey: string; hintKey: string; urlLabelKey: string; icon: string | { light: string; dark: string } }[] = [
   { id: 'codex', titleKey: 'auth_login.codex_oauth_title', hintKey: 'auth_login.codex_oauth_hint', urlLabelKey: 'auth_login.codex_oauth_url_label', icon: { light: iconCodexLight, dark: iconCodexDark } },
   { id: 'anthropic', titleKey: 'auth_login.anthropic_oauth_title', hintKey: 'auth_login.anthropic_oauth_hint', urlLabelKey: 'auth_login.anthropic_oauth_url_label', icon: iconClaude },
@@ -80,6 +94,15 @@ export function OAuthPage() {
   const [vertexState, setVertexState] = useState<VertexImportState>({
     fileName: '',
     location: '',
+    loading: false
+  });
+  const [kiroOAuth, setKiroOAuth] = useState<KiroOAuthState>({
+    method: null,
+    startUrl: '',
+    region: ''
+  });
+  const [kiroTokenImport, setKiroTokenImport] = useState<KiroTokenImportState>({
+    token: '',
     loading: false
   });
   const timers = useRef<Record<string, number>>({});
@@ -300,6 +323,48 @@ export function OAuthPage() {
         ? `${t('notification.upload_failed')}: ${message}`
         : t('notification.upload_failed');
       showNotification(notification, 'error');
+    }
+  };
+
+  const openKiroOAuth = (method: 'builder-id' | 'idc') => {
+    const baseUrl = window.location.origin;
+    let url = `${baseUrl}/v0/oauth/kiro/start?method=${method}`;
+    if (method === 'idc') {
+      const startUrl = kiroOAuth.startUrl.trim();
+      const region = kiroOAuth.region.trim();
+      if (startUrl) {
+        url += `&start_url=${encodeURIComponent(startUrl)}`;
+      }
+      if (region) {
+        url += `&region=${encodeURIComponent(region)}`;
+      }
+    }
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleKiroTokenImport = async () => {
+    const token = kiroTokenImport.token.trim();
+    if (!token) {
+      showNotification(t('auth_login.kiro_token_required'), 'warning');
+      return;
+    }
+    setKiroTokenImport((prev) => ({ ...prev, loading: true, error: undefined, success: undefined }));
+    try {
+      const baseUrl = window.location.origin;
+      const response = await fetch(`${baseUrl}/v0/oauth/kiro/import`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token })
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${response.status}`);
+      }
+      setKiroTokenImport((prev) => ({ ...prev, loading: false, success: true }));
+      showNotification(t('auth_login.kiro_token_import_success'), 'success');
+    } catch (err: any) {
+      setKiroTokenImport((prev) => ({ ...prev, loading: false, error: err?.message }));
+      showNotification(`${t('auth_login.kiro_token_import_error')} ${err?.message || ''}`, 'error');
     }
   };
 
@@ -573,6 +638,95 @@ export function OAuthPage() {
               </div>
             </div>
           )}
+        </Card>
+
+        {/* Kiro OAuth 登录 */}
+        <Card
+          title={
+            <span className={styles.cardTitle}>
+              <img src={iconKiro} alt="" className={styles.cardTitleIcon} />
+              {t('auth_login.kiro_oauth_title')}
+            </span>
+          }
+        >
+          <div className="hint">{t('auth_login.kiro_oauth_hint')}</div>
+
+          {/* AWS Builder ID 登录 */}
+          <div className="form-group" style={{ marginTop: 16 }}>
+            <label className="label">{t('auth_login.kiro_builder_id_label')}</label>
+            <div className="hint">{t('auth_login.kiro_builder_id_hint')}</div>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => openKiroOAuth('builder-id')}
+              style={{ marginTop: 8 }}
+            >
+              {t('auth_login.kiro_builder_id_button')}
+            </Button>
+          </div>
+
+          {/* AWS Identity Center (IDC) 登录 */}
+          <div className="form-group" style={{ marginTop: 16 }}>
+            <label className="label">{t('auth_login.kiro_idc_label')}</label>
+            <div className="hint">{t('auth_login.kiro_idc_hint')}</div>
+            <Input
+              label={t('auth_login.kiro_idc_start_url_label')}
+              value={kiroOAuth.startUrl}
+              onChange={(e) => setKiroOAuth((prev) => ({ ...prev, startUrl: e.target.value }))}
+              placeholder={t('auth_login.kiro_idc_start_url_placeholder')}
+            />
+            <Input
+              label={t('auth_login.kiro_idc_region_label')}
+              value={kiroOAuth.region}
+              onChange={(e) => setKiroOAuth((prev) => ({ ...prev, region: e.target.value }))}
+              placeholder={t('auth_login.kiro_idc_region_placeholder')}
+            />
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => openKiroOAuth('idc')}
+              style={{ marginTop: 8 }}
+            >
+              {t('auth_login.kiro_idc_button')}
+            </Button>
+          </div>
+
+          {/* Token 导入 */}
+          <div className="form-group" style={{ marginTop: 16 }}>
+            <label className="label">{t('auth_login.kiro_token_import_label')}</label>
+            <div className="hint">{t('auth_login.kiro_token_import_hint')}</div>
+            <Input
+              value={kiroTokenImport.token}
+              onChange={(e) =>
+                setKiroTokenImport((prev) => ({
+                  ...prev,
+                  token: e.target.value,
+                  error: undefined,
+                  success: undefined
+                }))
+              }
+              placeholder={t('auth_login.kiro_token_placeholder')}
+            />
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleKiroTokenImport}
+              loading={kiroTokenImport.loading}
+              style={{ marginTop: 8 }}
+            >
+              {t('auth_login.kiro_token_import_button')}
+            </Button>
+            {kiroTokenImport.success && (
+              <div className="status-badge success" style={{ marginTop: 8 }}>
+                {t('auth_login.kiro_token_import_success')}
+              </div>
+            )}
+            {kiroTokenImport.error && (
+              <div className="status-badge error" style={{ marginTop: 8 }}>
+                {t('auth_login.kiro_token_import_error')} {kiroTokenImport.error}
+              </div>
+            )}
+          </div>
         </Card>
       </div>
     </div>
