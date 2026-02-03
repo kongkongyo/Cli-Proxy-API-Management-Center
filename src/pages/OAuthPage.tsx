@@ -15,7 +15,7 @@ import iconGemini from '@/assets/icons/gemini.svg';
 import iconQwen from '@/assets/icons/qwen.svg';
 import iconIflow from '@/assets/icons/iflow.svg';
 import iconVertex from '@/assets/icons/vertex.svg';
-import iconGithubCopilot from '@/assets/icons/openai-light.svg';
+import iconGithubCopilot from '@/assets/icons/github-copilot-white.svg';
 
 interface ProviderState {
   url?: string;

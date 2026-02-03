@@ -485,6 +485,7 @@
     "plan_unknown": "Unknown",
     "chat_quota": "Chat Quota",
     "completions_quota": "Completions Quota",
+    "premium_quota": "Premium Interactions",
     "limit_label": "Limit: {{limit}}",
     "quota_reset_date": "Quota Resets",
     "expires_at": "Token Expires At",

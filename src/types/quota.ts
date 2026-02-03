@@ -171,7 +171,14 @@ export interface GithubCopilotQuotaState {
   expiresAt: number | null;
   refreshIn: number | null;
   chatQuota: number | null;
+  chatPercent: number | null;
+  chatUnlimited: boolean;
   completionsQuota: number | null;
+  completionsPercent: number | null;
+  completionsUnlimited: boolean;
+  premiumQuota: number | null;
+  premiumPercent: number | null;
+  premiumEntitlement: number | null;
   quotaResetDate: number | null;
   sku: string | null;
   error?: string;
