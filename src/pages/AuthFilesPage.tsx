@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { useTranslation } from 'react-i18next';
+import { useEffect, useMemo, useRef, useState, useCallback, type ReactNode } from 'react';
+import { Trans, useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useInterval } from '@/hooks/useInterval';
 import { useHeaderRefresh } from '@/hooks/useHeaderRefresh';
@@ -10,17 +10,23 @@ import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
+import { ModelMappingDiagram, type ModelMappingDiagramRef } from '@/components/modelAlias';
 import {
   IconBot,
   IconCode,
+  IconChevronUp,
   IconDownload,
   IconInfo,
+  IconRefreshCw,
   IconTrash2,
 } from '@/components/ui/icons';
-import { useAuthStore, useNotificationStore, useThemeStore } from '@/stores';
+import type { TFunction } from 'i18next';
+import { ANTIGRAVITY_CONFIG, CODEX_CONFIG, GEMINI_CLI_CONFIG } from '@/components/quota';
+import { useAuthStore, useNotificationStore, useQuotaStore, useThemeStore } from '@/stores';
 import { authFilesApi, usageApi } from '@/services/api';
 import { apiClient } from '@/services/api/client';
 import type { AuthFileItem, OAuthModelAliasEntry } from '@/types';
+import { getStatusFromError, resolveAuthProvider } from '@/utils/quota';
 import {
   calculateStatusBarData,
   collectUsageDetails,
@@ -88,6 +94,49 @@ const AUTH_FILES_UI_STATE_KEY = 'authFilesPage.uiState';
 
 const clampCardPageSize = (value: number) =>
   Math.min(MAX_CARD_PAGE_SIZE, Math.max(MIN_CARD_PAGE_SIZE, Math.round(value)));
+
+type QuotaProviderType = 'antigravity' | 'codex' | 'gemini-cli';
+
+const QUOTA_PROVIDER_TYPES = new Set<QuotaProviderType>(['antigravity', 'codex', 'gemini-cli']);
+
+const resolveQuotaErrorMessage = (
+  t: TFunction,
+  status: number | undefined,
+  fallback: string
+): string => {
+  if (status === 404) return t('common.quota_update_required');
+  if (status === 403) return t('common.quota_check_credential');
+  return fallback;
+};
+
+type QuotaProgressBarProps = {
+  percent: number | null;
+  highThreshold: number;
+  mediumThreshold: number;
+};
+
+function QuotaProgressBar({ percent, highThreshold, mediumThreshold }: QuotaProgressBarProps) {
+  const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+  const normalized = percent === null ? null : clamp(percent, 0, 100);
+  const fillClass =
+    normalized === null
+      ? styles.quotaBarFillMedium
+      : normalized >= highThreshold
+        ? styles.quotaBarFillHigh
+        : normalized >= mediumThreshold
+          ? styles.quotaBarFillMedium
+          : styles.quotaBarFillLow;
+  const widthPercent = Math.round(normalized ?? 0);
+
+  return (
+    <div className={styles.quotaBar}>
+      <div
+        className={`${styles.quotaBarFill} ${fillClass}`}
+        style={{ width: `${widthPercent}%` }}
+      />
+    </div>
+  );
+}
 
 type AuthFilesUiState = {
   filter?: string;
@@ -193,6 +242,12 @@ export function AuthFilesPage() {
   const { showNotification, showConfirmation } = useNotificationStore();
   const connectionStatus = useAuthStore((state) => state.connectionStatus);
   const resolvedTheme: ResolvedTheme = useThemeStore((state) => state.resolvedTheme);
+  const antigravityQuota = useQuotaStore((state) => state.antigravityQuota);
+  const codexQuota = useQuotaStore((state) => state.codexQuota);
+  const geminiCliQuota = useQuotaStore((state) => state.geminiCliQuota);
+  const setAntigravityQuota = useQuotaStore((state) => state.setAntigravityQuota);
+  const setCodexQuota = useQuotaStore((state) => state.setCodexQuota);
+  const setGeminiCliQuota = useQuotaStore((state) => state.setGeminiCliQuota);
   const navigate = useNavigate();
 
   const [files, setFiles] = useState<AuthFileItem[]>([]);
@@ -230,6 +285,10 @@ export function AuthFilesPage() {
   // OAuth 模型映射相关
   const [modelAlias, setModelAlias] = useState<Record<string, OAuthModelAliasEntry[]>>({});
   const [modelAliasError, setModelAliasError] = useState<'unsupported' | null>(null);
+  const [allProviderModels, setAllProviderModels] = useState<Record<string, AuthFileModelItem[]>>(
+    {}
+  );
+  const [viewMode, setViewMode] = useState<'diagram' | 'list'>('list');
 
   const [prefixProxyEditor, setPrefixProxyEditor] = useState<PrefixProxyEditorState | null>(null);
 
@@ -237,10 +296,81 @@ export function AuthFilesPage() {
   const loadingKeyStatsRef = useRef(false);
   const excludedUnsupportedRef = useRef(false);
   const mappingsUnsupportedRef = useRef(false);
+  const diagramRef = useRef<ModelMappingDiagramRef | null>(null);
 
   const normalizeProviderKey = (value: string) => value.trim().toLowerCase();
 
   const disableControls = connectionStatus !== 'connected';
+  const normalizedFilter = normalizeProviderKey(String(filter));
+  const quotaFilterType: QuotaProviderType | null = QUOTA_PROVIDER_TYPES.has(
+    normalizedFilter as QuotaProviderType
+  )
+    ? (normalizedFilter as QuotaProviderType)
+    : null;
+
+  const providerList = useMemo(() => {
+    const providers = new Set<string>();
+
+    Object.keys(modelAlias).forEach((provider) => {
+      const key = provider.trim().toLowerCase();
+      if (key) providers.add(key);
+    });
+
+    files.forEach((file) => {
+      if (typeof file.type === 'string') {
+        const key = file.type.trim().toLowerCase();
+        if (key) providers.add(key);
+      }
+      if (typeof file.provider === 'string') {
+        const key = file.provider.trim().toLowerCase();
+        if (key) providers.add(key);
+      }
+    });
+    return Array.from(providers);
+  }, [files, modelAlias]);
+
+  useEffect(() => {
+    if (viewMode !== 'diagram') return;
+
+    let cancelled = false;
+
+    const loadAllModels = async () => {
+      if (providerList.length === 0) {
+        if (!cancelled) setAllProviderModels({});
+        return;
+      }
+
+      const results = await Promise.all(
+        providerList.map(async (provider) => {
+          try {
+            const models = await authFilesApi.getModelDefinitions(provider);
+            return { provider, models };
+          } catch {
+            return { provider, models: [] };
+          }
+        })
+      );
+
+      if (cancelled) return;
+
+      const nextModels: Record<string, AuthFileModelItem[]> = {};
+      results.forEach(({ provider, models }) => {
+        if (models.length > 0) {
+          nextModels[provider] = models;
+        }
+      });
+
+      setAllProviderModels(nextModels);
+    };
+
+    void loadAllModels();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [providerList, viewMode]);
+
+
 
   useEffect(() => {
     const persisted = readAuthFilesUiState();
@@ -603,7 +733,9 @@ export function AuthFilesPage() {
             setFiles((prev) => prev.filter((file) => isRuntimeOnlyAuthFile(file)));
           } else {
             // 删除筛选类型的文件
-            const filesToDelete = files.filter((f) => f.type === filter && !isRuntimeOnlyAuthFile(f));
+            const filesToDelete = files.filter(
+              (f) => f.type === filter && !isRuntimeOnlyAuthFile(f)
+            );
 
             if (filesToDelete.length === 0) {
               showNotification(t('auth_files.delete_filtered_none', { type: typeLabel }), 'info');
@@ -991,6 +1123,247 @@ export function AuthFilesPage() {
     });
   };
 
+  const handleMappingUpdate = async (provider: string, sourceModel: string, newAlias: string) => {
+    if (!provider || !sourceModel || !newAlias) return;
+    const normalizedProvider = normalizeProviderKey(provider);
+    if (!normalizedProvider) return;
+
+    const providerKey = Object.keys(modelAlias).find(
+      (key) => normalizeProviderKey(key) === normalizedProvider
+    );
+    const currentMappings = (providerKey ? modelAlias[providerKey] : null) ?? [];
+
+    const nameTrim = sourceModel.trim();
+    const aliasTrim = newAlias.trim();
+    const nameKey = nameTrim.toLowerCase();
+    const aliasKey = aliasTrim.toLowerCase();
+
+    if (
+      currentMappings.some(
+        (m) =>
+          (m.name ?? '').trim().toLowerCase() === nameKey &&
+          (m.alias ?? '').trim().toLowerCase() === aliasKey
+      )
+    ) {
+      return;
+    }
+
+    const nextMappings: OAuthModelAliasEntry[] = [
+      ...currentMappings,
+      { name: nameTrim, alias: aliasTrim, fork: true },
+    ];
+
+    try {
+      await authFilesApi.saveOauthModelAlias(normalizedProvider, nextMappings);
+      await loadModelAlias();
+      showNotification(t('oauth_model_alias.save_success'), 'success');
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : '';
+      showNotification(`${t('oauth_model_alias.save_failed')}: ${errorMessage}`, 'error');
+    }
+  };
+
+  const handleDeleteLink = (provider: string, sourceModel: string, alias: string) => {
+    const nameTrim = sourceModel.trim();
+    const aliasTrim = alias.trim();
+    if (!provider || !nameTrim || !aliasTrim) return;
+
+    showConfirmation({
+      title: t('oauth_model_alias.delete_link_title', { defaultValue: 'Unlink mapping' }),
+      message: (
+        <Trans
+          i18nKey="oauth_model_alias.delete_link_confirm"
+          values={{ provider, sourceModel: nameTrim, alias: aliasTrim }}
+          components={{ code: <code /> }}
+        />
+      ),
+      variant: 'danger',
+      confirmText: t('common.confirm'),
+      onConfirm: async () => {
+        const normalizedProvider = normalizeProviderKey(provider);
+        const providerKey = Object.keys(modelAlias).find(
+          (key) => normalizeProviderKey(key) === normalizedProvider
+        );
+        const currentMappings = (providerKey ? modelAlias[providerKey] : null) ?? [];
+        const nameKey = nameTrim.toLowerCase();
+        const aliasKey = aliasTrim.toLowerCase();
+        const nextMappings = currentMappings.filter(
+          (m) =>
+            (m.name ?? '').trim().toLowerCase() !== nameKey ||
+            (m.alias ?? '').trim().toLowerCase() !== aliasKey
+        );
+        if (nextMappings.length === currentMappings.length) return;
+
+        try {
+          if (nextMappings.length === 0) {
+            await authFilesApi.deleteOauthModelAlias(normalizedProvider);
+          } else {
+            await authFilesApi.saveOauthModelAlias(normalizedProvider, nextMappings);
+          }
+          await loadModelAlias();
+          showNotification(t('oauth_model_alias.save_success'), 'success');
+        } catch (err: unknown) {
+          const errorMessage = err instanceof Error ? err.message : '';
+          showNotification(`${t('oauth_model_alias.save_failed')}: ${errorMessage}`, 'error');
+        }
+      },
+    });
+  };
+
+  const handleToggleFork = async (
+    provider: string,
+    sourceModel: string,
+    alias: string,
+    fork: boolean
+  ) => {
+    const normalizedProvider = normalizeProviderKey(provider);
+    if (!normalizedProvider) return;
+
+    const providerKey = Object.keys(modelAlias).find(
+      (key) => normalizeProviderKey(key) === normalizedProvider
+    );
+    const currentMappings = (providerKey ? modelAlias[providerKey] : null) ?? [];
+    const nameKey = sourceModel.trim().toLowerCase();
+    const aliasKey = alias.trim().toLowerCase();
+    let changed = false;
+
+    const nextMappings = currentMappings.map((m) => {
+      const mName = (m.name ?? '').trim().toLowerCase();
+      const mAlias = (m.alias ?? '').trim().toLowerCase();
+      if (mName === nameKey && mAlias === aliasKey) {
+        changed = true;
+        return fork ? { ...m, fork: true } : { name: m.name, alias: m.alias };
+      }
+      return m;
+    });
+
+    if (!changed) return;
+
+    try {
+      await authFilesApi.saveOauthModelAlias(normalizedProvider, nextMappings);
+      await loadModelAlias();
+      showNotification(t('oauth_model_alias.save_success'), 'success');
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : '';
+      showNotification(`${t('oauth_model_alias.save_failed')}: ${errorMessage}`, 'error');
+    }
+  };
+
+  const handleRenameAlias = async (oldAlias: string, newAlias: string) => {
+    const oldTrim = oldAlias.trim();
+    const newTrim = newAlias.trim();
+    if (!oldTrim || !newTrim || oldTrim === newTrim) return;
+
+    const oldKey = oldTrim.toLowerCase();
+    const providersToUpdate = Object.entries(modelAlias).filter(([_, mappings]) =>
+      mappings.some((m) => (m.alias ?? '').trim().toLowerCase() === oldKey)
+    );
+
+    if (providersToUpdate.length === 0) return;
+
+    let hadFailure = false;
+    let failureMessage = '';
+
+    try {
+      const results = await Promise.allSettled(
+        providersToUpdate.map(([provider, mappings]) => {
+          const nextMappings = mappings.map((m) =>
+            (m.alias ?? '').trim().toLowerCase() === oldKey ? { ...m, alias: newTrim } : m
+          );
+          return authFilesApi.saveOauthModelAlias(provider, nextMappings);
+        })
+      );
+
+      const failures = results.filter(
+        (result): result is PromiseRejectedResult => result.status === 'rejected'
+      );
+
+      if (failures.length > 0) {
+        hadFailure = true;
+        const reason = failures[0].reason;
+        failureMessage = reason instanceof Error ? reason.message : String(reason ?? '');
+      }
+    } finally {
+      await loadModelAlias();
+    }
+
+    if (hadFailure) {
+      showNotification(
+        failureMessage
+          ? `${t('oauth_model_alias.save_failed')}: ${failureMessage}`
+          : t('oauth_model_alias.save_failed'),
+        'error'
+      );
+    } else {
+      showNotification(t('oauth_model_alias.save_success'), 'success');
+    }
+  };
+
+  const handleDeleteAlias = (aliasName: string) => {
+    const aliasTrim = aliasName.trim();
+    if (!aliasTrim) return;
+    const aliasKey = aliasTrim.toLowerCase();
+    const providersToUpdate = Object.entries(modelAlias).filter(([_, mappings]) =>
+      mappings.some((m) => (m.alias ?? '').trim().toLowerCase() === aliasKey)
+    );
+
+    if (providersToUpdate.length === 0) return;
+
+    showConfirmation({
+      title: t('oauth_model_alias.delete_alias_title', { defaultValue: 'Delete Alias' }),
+      message: (
+        <Trans
+          i18nKey="oauth_model_alias.delete_alias_confirm"
+          values={{ alias: aliasTrim }}
+          components={{ code: <code /> }}
+        />
+      ),
+      variant: 'danger',
+      confirmText: t('common.confirm'),
+      onConfirm: async () => {
+        let hadFailure = false;
+        let failureMessage = '';
+
+        try {
+          const results = await Promise.allSettled(
+            providersToUpdate.map(([provider, mappings]) => {
+              const nextMappings = mappings.filter(
+                (m) => (m.alias ?? '').trim().toLowerCase() !== aliasKey
+              );
+              if (nextMappings.length === 0) {
+                return authFilesApi.deleteOauthModelAlias(provider);
+              }
+              return authFilesApi.saveOauthModelAlias(provider, nextMappings);
+            })
+          );
+
+          const failures = results.filter(
+            (result): result is PromiseRejectedResult => result.status === 'rejected'
+          );
+
+          if (failures.length > 0) {
+            hadFailure = true;
+            const reason = failures[0].reason;
+            failureMessage = reason instanceof Error ? reason.message : String(reason ?? '');
+          }
+        } finally {
+          await loadModelAlias();
+        }
+
+        if (hadFailure) {
+          showNotification(
+            failureMessage
+              ? `${t('oauth_model_alias.delete_failed')}: ${failureMessage}`
+              : t('oauth_model_alias.delete_failed'),
+            'error'
+          );
+        } else {
+          showNotification(t('oauth_model_alias.delete_success'), 'success');
+        }
+      },
+    });
+  };
+
   // 渲染标签筛选器
   const renderFilterTags = () => (
     <div className={styles.filterTags}>
@@ -1083,128 +1456,293 @@ export function AuthFilesPage() {
     );
   };
 
+  const resolveQuotaType = (file: AuthFileItem): QuotaProviderType | null => {
+    const provider = resolveAuthProvider(file);
+    if (!QUOTA_PROVIDER_TYPES.has(provider as QuotaProviderType)) return null;
+    return provider as QuotaProviderType;
+  };
+
+  const getQuotaConfig = (type: QuotaProviderType) => {
+    if (type === 'antigravity') return ANTIGRAVITY_CONFIG;
+    if (type === 'codex') return CODEX_CONFIG;
+    return GEMINI_CLI_CONFIG;
+  };
+
+  const getQuotaState = (type: QuotaProviderType, fileName: string) => {
+    if (type === 'antigravity') return antigravityQuota[fileName];
+    if (type === 'codex') return codexQuota[fileName];
+    return geminiCliQuota[fileName];
+  };
+
+  const updateQuotaState = useCallback(
+    (
+      type: QuotaProviderType,
+      updater: (prev: Record<string, unknown>) => Record<string, unknown>
+    ) => {
+      if (type === 'antigravity') {
+        setAntigravityQuota(updater as never);
+        return;
+      }
+      if (type === 'codex') {
+        setCodexQuota(updater as never);
+        return;
+      }
+      setGeminiCliQuota(updater as never);
+    },
+    [setAntigravityQuota, setCodexQuota, setGeminiCliQuota]
+  );
+
+  const refreshQuotaForFile = useCallback(
+    async (file: AuthFileItem, quotaType: QuotaProviderType) => {
+      if (disableControls) return;
+      if (isRuntimeOnlyAuthFile(file)) return;
+      if (file.disabled) return;
+
+      const currentState = getQuotaState(quotaType, file.name);
+      if (currentState?.status === 'loading') return;
+
+      const config = getQuotaConfig(quotaType) as unknown as {
+        i18nPrefix: string;
+        fetchQuota: (file: AuthFileItem, t: TFunction) => Promise<unknown>;
+        buildLoadingState: () => unknown;
+        buildSuccessState: (data: unknown) => unknown;
+        buildErrorState: (message: string, status?: number) => unknown;
+      };
+
+      updateQuotaState(quotaType, (prev) => ({
+        ...prev,
+        [file.name]: config.buildLoadingState()
+      }));
+
+      try {
+        const data = await config.fetchQuota(file, t);
+        updateQuotaState(quotaType, (prev) => ({
+          ...prev,
+          [file.name]: config.buildSuccessState(data)
+        }));
+        showNotification(t('auth_files.quota_refresh_success', { name: file.name }), 'success');
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : t('common.unknown_error');
+        const status = getStatusFromError(err);
+        updateQuotaState(quotaType, (prev) => ({
+          ...prev,
+          [file.name]: config.buildErrorState(message, status)
+        }));
+        showNotification(
+          t('auth_files.quota_refresh_failed', { name: file.name, message }),
+          'error'
+        );
+      }
+    },
+    [disableControls, getQuotaState, showNotification, t, updateQuotaState]
+  );
+
+  const renderQuotaSection = (item: AuthFileItem, quotaType: QuotaProviderType) => {
+    const config = getQuotaConfig(quotaType) as unknown as {
+      i18nPrefix: string;
+      renderQuotaItems: (quota: unknown, t: TFunction, helpers: unknown) => unknown;
+    };
+
+    const quota = getQuotaState(quotaType, item.name) as
+      | { status?: string; error?: string; errorStatus?: number }
+      | undefined;
+    const quotaStatus = quota?.status ?? 'idle';
+    const quotaErrorMessage = resolveQuotaErrorMessage(
+      t,
+      quota?.errorStatus,
+      quota?.error || t('common.unknown_error')
+    );
+
+    return (
+      <div className={styles.quotaSection}>
+        {quotaStatus === 'loading' ? (
+          <div className={styles.quotaMessage}>{t(`${config.i18nPrefix}.loading`)}</div>
+        ) : quotaStatus === 'idle' ? (
+          <div className={styles.quotaMessage}>{t(`${config.i18nPrefix}.idle`)}</div>
+        ) : quotaStatus === 'error' ? (
+          <div className={styles.quotaError}>
+            {t(`${config.i18nPrefix}.load_failed`, {
+              message: quotaErrorMessage
+            })}
+          </div>
+        ) : quota ? (
+          (config.renderQuotaItems(quota, t, { styles, QuotaProgressBar }) as ReactNode)
+        ) : (
+          <div className={styles.quotaMessage}>{t(`${config.i18nPrefix}.idle`)}</div>
+        )}
+      </div>
+    );
+  };
+
   // 渲染单个认证文件卡片
-	  const renderFileCard = (item: AuthFileItem) => {
-	    const fileStats = resolveAuthFileStats(item, keyStats);
-	    const isRuntimeOnly = isRuntimeOnlyAuthFile(item);
-	    const isAistudio = (item.type || '').toLowerCase() === 'aistudio';
-	    const showModelsButton = !isRuntimeOnly || isAistudio;
-	    const typeColor = getTypeColor(item.type || 'unknown');
+  const renderFileCard = (item: AuthFileItem) => {
+    const fileStats = resolveAuthFileStats(item, keyStats);
+    const isRuntimeOnly = isRuntimeOnlyAuthFile(item);
+    const isAistudio = (item.type || '').toLowerCase() === 'aistudio';
+    const showModelsButton = !isRuntimeOnly || isAistudio;
+    const typeColor = getTypeColor(item.type || 'unknown');
 
-	    return (
-	      <div
-	        key={item.name}
-	        className={`${styles.fileCard} ${item.disabled ? styles.fileCardDisabled : ''}`}
-	      >
-	        <div className={styles.cardHeader}>
-	          <span
-	            className={styles.typeBadge}
-	            style={{
-              backgroundColor: typeColor.bg,
-              color: typeColor.text,
-              ...(typeColor.border ? { border: typeColor.border } : {}),
-            }}
-          >
-            {getTypeLabel(item.type || 'unknown')}
-          </span>
-          <span className={styles.fileName}>{item.name}</span>
-        </div>
+    const quotaType =
+      quotaFilterType && resolveQuotaType(item) === quotaFilterType ? quotaFilterType : null;
 
-        <div className={styles.cardMeta}>
-          <span>
-            {t('auth_files.file_size')}: {item.size ? formatFileSize(item.size) : '-'}
-          </span>
-          <span>
-            {t('auth_files.file_modified')}: {formatModified(item)}
-          </span>
-        </div>
+    const showQuotaLayout = Boolean(quotaType) && !isRuntimeOnly;
+    const quotaState = quotaType ? getQuotaState(quotaType, item.name) : undefined;
+    const quotaRefreshing = quotaState?.status === 'loading';
 
-        <div className={styles.cardStats}>
-          <span className={`${styles.statPill} ${styles.statSuccess}`}>
-            {t('stats.success')}: {fileStats.success}
-          </span>
-          <span className={`${styles.statPill} ${styles.statFailure}`}>
-            {t('stats.failure')}: {fileStats.failure}
-          </span>
-        </div>
+    const providerCardClass =
+      quotaType === 'antigravity'
+        ? styles.antigravityCard
+        : quotaType === 'codex'
+          ? styles.codexCard
+          : quotaType === 'gemini-cli'
+            ? styles.geminiCliCard
+            : '';
 
-        {/* 状态监测栏 */}
-        {renderStatusBar(item)}
-
-        <div className={styles.cardActions}>
-          {showModelsButton && (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => showModels(item)}
-              className={styles.iconButton}
-              title={t('auth_files.models_button', { defaultValue: '模型' })}
-              disabled={disableControls}
-            >
-              <IconBot className={styles.actionIcon} size={16} />
-            </Button>
-          )}
-          {!isRuntimeOnly && (
-            <>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => showDetails(item)}
-                className={styles.iconButton}
-                title={t('common.info', { defaultValue: '关于' })}
-                disabled={disableControls}
+    return (
+      <div
+        key={item.name}
+        className={`${styles.fileCard} ${providerCardClass} ${item.disabled ? styles.fileCardDisabled : ''}`}
+      >
+        <div
+          className={`${styles.fileCardLayout} ${showQuotaLayout ? styles.fileCardLayoutQuota : ''}`}
+        >
+          <div className={styles.fileCardMain}>
+            <div className={styles.cardHeader}>
+              <span
+                className={styles.typeBadge}
+                style={{
+                  backgroundColor: typeColor.bg,
+                  color: typeColor.text,
+                  ...(typeColor.border ? { border: typeColor.border } : {}),
+                }}
               >
-                <IconInfo className={styles.actionIcon} size={16} />
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => handleDownload(item.name)}
-                className={styles.iconButton}
-                title={t('auth_files.download_button')}
-                disabled={disableControls}
-              >
-                <IconDownload className={styles.actionIcon} size={16} />
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => void openPrefixProxyEditor(item.name)}
-                className={styles.iconButton}
-                title={t('auth_files.prefix_proxy_button')}
-                disabled={disableControls}
-              >
-                <IconCode className={styles.actionIcon} size={16} />
-              </Button>
-              <Button
-                variant="danger"
-                size="sm"
-                onClick={() => handleDelete(item.name)}
-                className={styles.iconButton}
-                title={t('auth_files.delete_button')}
-                disabled={disableControls || deleting === item.name}
-              >
-                {deleting === item.name ? (
-                  <LoadingSpinner size={14} />
-                ) : (
-                  <IconTrash2 className={styles.actionIcon} size={16} />
-                )}
-              </Button>
-            </>
-          )}
-          {!isRuntimeOnly && (
-            <div className={styles.statusToggle}>
-              <ToggleSwitch
-                ariaLabel={t('auth_files.status_toggle_label')}
-                checked={!item.disabled}
-                disabled={disableControls || statusUpdating[item.name] === true}
-                onChange={(value) => void handleStatusToggle(item, value)}
-              />
+                {getTypeLabel(item.type || 'unknown')}
+              </span>
+              <span className={styles.fileName}>{item.name}</span>
             </div>
-          )}
-          {isRuntimeOnly && (
-            <div className={styles.virtualBadge}>
-              {t('auth_files.type_virtual') || '虚拟认证文件'}
+
+            <div className={styles.cardMeta}>
+              <span>
+                {t('auth_files.file_size')}: {item.size ? formatFileSize(item.size) : '-'}
+              </span>
+              <span>
+                {t('auth_files.file_modified')}: {formatModified(item)}
+              </span>
+            </div>
+
+            <div className={styles.cardStats}>
+              <span className={`${styles.statPill} ${styles.statSuccess}`}>
+                {t('stats.success')}: {fileStats.success}
+              </span>
+              <span className={`${styles.statPill} ${styles.statFailure}`}>
+                {t('stats.failure')}: {fileStats.failure}
+              </span>
+            </div>
+
+            {/* 状态监测栏 */}
+            {renderStatusBar(item)}
+
+            {showQuotaLayout && quotaType && renderQuotaSection(item, quotaType)}
+
+            <div className={styles.cardActions}>
+              {showModelsButton && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => showModels(item)}
+                  className={styles.iconButton}
+                  title={t('auth_files.models_button', { defaultValue: '模型' })}
+                  disabled={disableControls}
+                >
+                  <IconBot className={styles.actionIcon} size={16} />
+                </Button>
+              )}
+              {!isRuntimeOnly && (
+                <>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => showDetails(item)}
+                    className={styles.iconButton}
+                    title={t('common.info', { defaultValue: '关于' })}
+                    disabled={disableControls}
+                  >
+                    <IconInfo className={styles.actionIcon} size={16} />
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => handleDownload(item.name)}
+                    className={styles.iconButton}
+                    title={t('auth_files.download_button')}
+                    disabled={disableControls}
+                  >
+                    <IconDownload className={styles.actionIcon} size={16} />
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => void openPrefixProxyEditor(item.name)}
+                    className={styles.iconButton}
+                    title={t('auth_files.prefix_proxy_button')}
+                    disabled={disableControls}
+                  >
+                    <IconCode className={styles.actionIcon} size={16} />
+                  </Button>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={() => handleDelete(item.name)}
+                    className={styles.iconButton}
+                    title={t('auth_files.delete_button')}
+                    disabled={disableControls || deleting === item.name}
+                  >
+                    {deleting === item.name ? (
+                      <LoadingSpinner size={14} />
+                    ) : (
+                      <IconTrash2 className={styles.actionIcon} size={16} />
+                    )}
+                  </Button>
+                </>
+              )}
+              {!isRuntimeOnly && (
+                <div className={styles.statusToggle}>
+                  <ToggleSwitch
+                    ariaLabel={t('auth_files.status_toggle_label')}
+                    checked={!item.disabled}
+                    disabled={disableControls || statusUpdating[item.name] === true}
+                    onChange={(value) => void handleStatusToggle(item, value)}
+                  />
+                </div>
+              )}
+              {isRuntimeOnly && (
+                <div className={styles.virtualBadge}>
+                  {t('auth_files.type_virtual') || '虚拟认证文件'}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {showQuotaLayout && quotaType && (
+            <div className={styles.fileCardSidebar}>
+              <div className={styles.fileCardSidebarHeader}>
+                <span className={styles.fileCardSidebarTitle}>
+                  {t('auth_files.card_tools_title')}
+                </span>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className={styles.iconButton}
+                  onClick={() => void refreshQuotaForFile(item, quotaType)}
+                  disabled={disableControls || item.disabled}
+                  loading={quotaRefreshing}
+                  title={t('auth_files.quota_refresh_single')}
+                  aria-label={t('auth_files.quota_refresh_single')}
+                >
+                  {!quotaRefreshing && <IconRefreshCw className={styles.actionIcon} size={16} />}
+                </Button>
+              </div>
+              <div className={styles.fileCardSidebarHint}>{t('auth_files.quota_refresh_hint')}</div>
             </div>
           )}
         </div>
@@ -1311,7 +1849,11 @@ export function AuthFilesPage() {
             description={t('auth_files.search_empty_desc')}
           />
         ) : (
-          <div className={styles.fileGrid}>{pageItems.map(renderFileCard)}</div>
+          <div
+            className={`${styles.fileGrid} ${quotaFilterType ? styles.fileGridQuotaManaged : ''}`}
+          >
+            {pageItems.map(renderFileCard)}
+          </div>
         )}
 
         {/* 分页 */}
@@ -1377,7 +1919,11 @@ export function AuthFilesPage() {
                   </div>
                 </div>
                 <div className={styles.excludedActions}>
-                  <Button variant="secondary" size="sm" onClick={() => openExcludedEditor(provider)}>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => openExcludedEditor(provider)}
+                  >
                     {t('common.edit')}
                   </Button>
                   <Button variant="danger" size="sm" onClick={() => deleteExcluded(provider)}>
@@ -1394,13 +1940,33 @@ export function AuthFilesPage() {
       <Card
         title={t('oauth_model_alias.title')}
         extra={
-          <Button
-            size="sm"
-            onClick={() => openModelAliasEditor()}
-            disabled={disableControls || modelAliasError === 'unsupported'}
-          >
-            {t('oauth_model_alias.add')}
-          </Button>
+          <div className={styles.cardExtraButtons}>
+            <div className={styles.viewModeSwitch}>
+              <Button
+                variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('list')}
+                disabled={disableControls || modelAliasError === 'unsupported'}
+              >
+                {t('oauth_model_alias.view_mode_list')}
+              </Button>
+              <Button
+                variant={viewMode === 'diagram' ? 'secondary' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('diagram')}
+                disabled={disableControls || modelAliasError === 'unsupported'}
+              >
+                {t('oauth_model_alias.view_mode_diagram')}
+              </Button>
+            </div>
+            <Button
+              size="sm"
+              onClick={() => openModelAliasEditor()}
+              disabled={disableControls || modelAliasError === 'unsupported'}
+            >
+              {t('oauth_model_alias.add')}
+            </Button>
+          </div>
         }
       >
         {modelAliasError === 'unsupported' ? (
@@ -1408,6 +1974,39 @@ export function AuthFilesPage() {
             title={t('oauth_model_alias.upgrade_required_title')}
             description={t('oauth_model_alias.upgrade_required_desc')}
           />
+        ) : viewMode === 'diagram' ? (
+          Object.keys(modelAlias).length === 0 ? (
+            <EmptyState title={t('oauth_model_alias.list_empty_all')} />
+          ) : (
+            <div className={styles.aliasChartSection}>
+              <div className={styles.aliasChartHeader}>
+                <h4 className={styles.aliasChartTitle}>{t('oauth_model_alias.chart_title')}</h4>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => diagramRef.current?.collapseAll()}
+                  disabled={disableControls || modelAliasError === 'unsupported'}
+                  title={t('oauth_model_alias.diagram_collapse')}
+                  aria-label={t('oauth_model_alias.diagram_collapse')}
+                >
+                  <IconChevronUp size={16} />
+                </Button>
+              </div>
+              <ModelMappingDiagram
+                ref={diagramRef}
+                modelAlias={modelAlias}
+                allProviderModels={allProviderModels}
+                onUpdate={handleMappingUpdate}
+                onDeleteLink={handleDeleteLink}
+                onToggleFork={handleToggleFork}
+                onRenameAlias={handleRenameAlias}
+                onDeleteAlias={handleDeleteAlias}
+                onEditProvider={openModelAliasEditor}
+                onDeleteProvider={deleteModelAlias}
+                className={styles.aliasChart}
+              />
+            </div>
+          )
         ) : Object.keys(modelAlias).length === 0 ? (
           <EmptyState title={t('oauth_model_alias.list_empty_all')} />
         ) : (
@@ -1625,7 +2224,6 @@ export function AuthFilesPage() {
           </div>
         )}
       </Modal>
-
     </div>
   );
 }
