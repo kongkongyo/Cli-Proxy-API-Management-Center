@@ -19,12 +19,10 @@ import {
   IconChartLine,
   IconFileText,
   IconInfo,
-  IconKey,
   IconLayoutDashboard,
   IconScrollText,
   IconSettings,
   IconShield,
-  IconSlidersHorizontal,
   IconTimer,
   IconActivity,
 } from '@/components/ui/icons';
@@ -41,8 +39,6 @@ import { triggerHeaderRefresh } from '@/hooks/useHeaderRefresh';
 
 const sidebarIcons: Record<string, ReactNode> = {
   dashboard: <IconLayoutDashboard size={18} />,
-  settings: <IconSlidersHorizontal size={18} />,
-  apiKeys: <IconKey size={18} />,
   aiProviders: <IconBot size={18} />,
   authFiles: <IconFileText size={18} />,
   oauth: <IconShield size={18} />,
@@ -247,6 +243,37 @@ export function MainLayout() {
     };
   }, []);
 
+  // 将主内容区的中心点写入 CSS 变量，供底部浮层（如配置面板操作栏）对齐到内容区而非整窗
+  useLayoutEffect(() => {
+    const updateContentCenter = () => {
+      const el = contentRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      document.documentElement.style.setProperty('--content-center-x', `${centerX}px`);
+    };
+
+    updateContentCenter();
+
+    const resizeObserver =
+      typeof ResizeObserver !== 'undefined' && contentRef.current
+        ? new ResizeObserver(updateContentCenter)
+        : null;
+
+    if (resizeObserver && contentRef.current) {
+      resizeObserver.observe(contentRef.current);
+    }
+
+    window.addEventListener('resize', updateContentCenter);
+
+    return () => {
+      if (resizeObserver) {
+        resizeObserver.disconnect();
+      }
+      window.removeEventListener('resize', updateContentCenter);
+    };
+  }, []);
+
   // 5秒后自动收起品牌名称
   useEffect(() => {
     brandCollapseTimer.current = setTimeout(() => {
@@ -359,14 +386,12 @@ export function MainLayout() {
 
   const navItems = [
     { path: '/', label: t('nav.dashboard'), icon: sidebarIcons.dashboard },
-    { path: '/settings', label: t('nav.basic_settings'), icon: sidebarIcons.settings },
-    { path: '/api-keys', label: t('nav.api_keys'), icon: sidebarIcons.apiKeys },
+    { path: '/config', label: t('nav.config_management'), icon: sidebarIcons.config },
     { path: '/ai-providers', label: t('nav.ai_providers'), icon: sidebarIcons.aiProviders },
     { path: '/auth-files', label: t('nav.auth_files'), icon: sidebarIcons.authFiles },
     { path: '/oauth', label: t('nav.oauth', { defaultValue: 'OAuth' }), icon: sidebarIcons.oauth },
     { path: '/quota', label: t('nav.quota_management'), icon: sidebarIcons.quota },
     { path: '/usage', label: t('nav.usage_stats'), icon: sidebarIcons.usage },
-    { path: '/config', label: t('nav.config_management'), icon: sidebarIcons.config },
     ...(config?.loggingToFile
       ? [{ path: '/logs', label: t('nav.logs'), icon: sidebarIcons.logs }]
       : []),
