@@ -586,7 +586,7 @@
 // 虚拟滚动表格固定列宽
 .virtualTable {
   table-layout: fixed;
-  min-width: 1180px;
+  min-width: 1280px;
 
   th, td {
     overflow: hidden;
@@ -594,32 +594,34 @@
     white-space: nowrap;
   }
 
+  // Auth 认证来源
+  th:nth-child(1), td:nth-child(1) { width: 100px; }
   // API
-  th:nth-child(1), td:nth-child(1) { width: 110px; }
+  th:nth-child(2), td:nth-child(2) { width: 110px; }
   // 请求类型
-  th:nth-child(2), td:nth-child(2) { width: 65px; }
+  th:nth-child(3), td:nth-child(3) { width: 65px; }
   // 模型
-  th:nth-child(3), td:nth-child(3) { width: 160px; }
+  th:nth-child(4), td:nth-child(4) { width: 160px; }
   // 请求渠道
-  th:nth-child(4), td:nth-child(4) { width: 140px; }
+  th:nth-child(5), td:nth-child(5) { width: 140px; }
   // 状态
-  th:nth-child(5), td:nth-child(5) { width: 60px; }
+  th:nth-child(6), td:nth-child(6) { width: 60px; }
   // 最近请求状态
-  th:nth-child(6), td:nth-child(6) { width: 100px; }
+  th:nth-child(7), td:nth-child(7) { width: 100px; }
   // 成功率
-  th:nth-child(7), td:nth-child(7) { width: 70px; }
-  // 请求数
   th:nth-child(8), td:nth-child(8) { width: 70px; }
+  // 请求数
+  th:nth-child(9), td:nth-child(9) { width: 70px; }
   // 输入
-  th:nth-child(9), td:nth-child(9) { width: 60px; }
-  // 输出
   th:nth-child(10), td:nth-child(10) { width: 60px; }
+  // 输出
+  th:nth-child(11), td:nth-child(11) { width: 60px; }
   // 总 Token
-  th:nth-child(11), td:nth-child(11) { width: 70px; }
+  th:nth-child(12), td:nth-child(12) { width: 70px; }
   // 时间
-  th:nth-child(12), td:nth-child(12) { width: 150px; }
+  th:nth-child(13), td:nth-child(13) { width: 150px; }
   // 操作
-  th:nth-child(13), td:nth-child(13) { width: 60px; }
+  th:nth-child(14), td:nth-child(14) { width: 60px; }
 }
 
 .table {
