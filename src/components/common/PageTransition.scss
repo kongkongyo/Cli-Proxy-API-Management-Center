@@ -14,6 +14,7 @@
     gap: $spacing-lg;
     min-height: 0;
     flex: 1;
+    background: var(--bg-secondary);
     backface-visibility: hidden;
     transform: translateZ(0);
 
@@ -21,10 +22,25 @@
     &--exit {
       position: absolute;
       inset: 0;
-      z-index: 1;
       overflow: hidden;
       pointer-events: none;
       will-change: transform, opacity;
+    }
+
+    &--stacked {
+      display: none;
+
+      // Keep the previous layer rendered (but invisible) to avoid a blank flash when popping back.
+      // Older stacked layers remain `display: none` for performance.
+      &.page-transition__layer--stacked-keep {
+        display: flex;
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+        pointer-events: none;
+        opacity: 0;
+        will-change: transform, opacity;
+      }
     }
   }
 
@@ -32,8 +48,7 @@
     will-change: transform, opacity;
   }
 
-  &--animating &__layer:not(.page-transition__layer--exit) {
+  &--animating &__layer:not(.page-transition__layer--exit):not(.page-transition__layer--stacked) {
     position: relative;
-    z-index: 0;
   }
 }

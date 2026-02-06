@@ -10,3 +10,4 @@ export { useConfigStore } from './useConfigStore';
 export { useModelsStore } from './useModelsStore';
 export { useQuotaStore } from './useQuotaStore';
 export { useDisabledModelsStore } from './useDisabledModelsStore';
+export { useOpenAIEditDraftStore } from './useOpenAIEditDraftStore';

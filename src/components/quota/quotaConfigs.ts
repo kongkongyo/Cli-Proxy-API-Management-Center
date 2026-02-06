@@ -10,13 +10,15 @@ import type {
   AntigravityModelsPayload,
   AntigravityQuotaState,
   AuthFileItem,
+  CodexRateLimitInfo,
   CodexQuotaState,
   CodexUsageWindow,
   CodexQuotaWindow,
   CodexUsagePayload,
   GeminiCliParsedBucket,
   GeminiCliQuotaBucketState,
-  GeminiCliQuotaState
+  GeminiCliQuotaState,
+  KiroQuotaState,
 } from '@/types';
 import { apiCallApi, authFilesApi, getApiCallErrorMessage } from '@/services/api';
 import {
@@ -26,6 +28,8 @@ import {
   CODEX_REQUEST_HEADERS,
   GEMINI_CLI_QUOTA_URL,
   GEMINI_CLI_REQUEST_HEADERS,
+  KIRO_QUOTA_URL,
+  KIRO_REQUEST_HEADERS,
   normalizeAuthIndexValue,
   normalizeNumberValue,
   normalizePlanType,
@@ -34,6 +38,7 @@ import {
   parseAntigravityPayload,
   parseCodexUsagePayload,
   parseGeminiCliQuotaPayload,
+  parseKiroQuotaPayload,
   resolveCodexChatgptAccountId,
   resolveCodexPlanType,
   resolveGeminiCliProjectId,
@@ -45,15 +50,17 @@ import {
   getStatusFromError,
   isAntigravityFile,
   isCodexFile,
+  isDisabledAuthFile,
   isGeminiCliFile,
-  isRuntimeOnlyAuthFile
+  isKiroFile,
+  isRuntimeOnlyAuthFile,
 } from '@/utils/quota';
 import type { QuotaRenderHelpers } from './QuotaCard';
 import styles from '@/pages/QuotaPage.module.scss';
 
 type QuotaUpdater<T> = T | ((prev: T) => T);
 
-type QuotaType = 'antigravity' | 'codex' | 'gemini-cli';
+type QuotaType = 'antigravity' | 'codex' | 'gemini-cli' | 'kiro';
 
 const DEFAULT_ANTIGRAVITY_PROJECT_ID = 'bamboo-precept-lgxtn';
 
@@ -61,9 +68,11 @@ export interface QuotaStore {
   antigravityQuota: Record<string, AntigravityQuotaState>;
   codexQuota: Record<string, CodexQuotaState>;
   geminiCliQuota: Record<string, GeminiCliQuotaState>;
+  kiroQuota: Record<string, KiroQuotaState>;
   setAntigravityQuota: (updater: QuotaUpdater<Record<string, AntigravityQuotaState>>) => void;
   setCodexQuota: (updater: QuotaUpdater<Record<string, CodexQuotaState>>) => void;
   setGeminiCliQuota: (updater: QuotaUpdater<Record<string, GeminiCliQuotaState>>) => void;
+  setKiroQuota: (updater: QuotaUpdater<Record<string, KiroQuotaState>>) => void;
   clearQuotaCache: () => void;
 }
 
@@ -116,11 +125,6 @@ const resolveAntigravityProjectId = async (file: AuthFileItem): Promise<string> 
   return DEFAULT_ANTIGRAVITY_PROJECT_ID;
 };
 
-const isAntigravityUnknownFieldError = (message: string): boolean => {
-  const normalized = message.toLowerCase();
-  return normalized.includes('unknown name') && normalized.includes('cannot find field');
-};
-
 const fetchAntigravityQuota = async (
   file: AuthFileItem,
   t: TFunction
@@ -132,7 +136,7 @@ const fetchAntigravityQuota = async (
   }
 
   const projectId = await resolveAntigravityProjectId(file);
-  const requestBodies = [JSON.stringify({ projectId }), JSON.stringify({ project: projectId })];
+  const requestBody = JSON.stringify({ project: projectId });
 
   let lastError = '';
   let lastStatus: number | undefined;
@@ -140,55 +144,46 @@ const fetchAntigravityQuota = async (
   let hadSuccess = false;
 
   for (const url of ANTIGRAVITY_QUOTA_URLS) {
-    for (let attempt = 0; attempt < requestBodies.length; attempt++) {
-      try {
-        const result = await apiCallApi.request({
-          authIndex,
-          method: 'POST',
-          url,
-          header: { ...ANTIGRAVITY_REQUEST_HEADERS },
-          data: requestBodies[attempt]
-        });
+    try {
+      const result = await apiCallApi.request({
+        authIndex,
+        method: 'POST',
+        url,
+        header: { ...ANTIGRAVITY_REQUEST_HEADERS },
+        data: requestBody,
+      });
 
-        if (result.statusCode < 200 || result.statusCode >= 300) {
-          lastError = getApiCallErrorMessage(result);
-          lastStatus = result.statusCode;
-          if (result.statusCode === 403 || result.statusCode === 404) {
-            priorityStatus ??= result.statusCode;
-          }
-          if (
-            result.statusCode === 400 &&
-            isAntigravityUnknownFieldError(lastError) &&
-            attempt < requestBodies.length - 1
-          ) {
-            continue;
-          }
-          break;
+      if (result.statusCode < 200 || result.statusCode >= 300) {
+        lastError = getApiCallErrorMessage(result);
+        lastStatus = result.statusCode;
+        if (result.statusCode === 403 || result.statusCode === 404) {
+          priorityStatus ??= result.statusCode;
         }
+        continue;
+      }
 
-        hadSuccess = true;
-        const payload = parseAntigravityPayload(result.body ?? result.bodyText);
-        const models = payload?.models;
-        if (!models || typeof models !== 'object' || Array.isArray(models)) {
-          lastError = t('antigravity_quota.empty_models');
-          continue;
-        }
+      hadSuccess = true;
+      const payload = parseAntigravityPayload(result.body ?? result.bodyText);
+      const models = payload?.models;
+      if (!models || typeof models !== 'object' || Array.isArray(models)) {
+        lastError = t('antigravity_quota.empty_models');
+        continue;
+      }
 
-        const groups = buildAntigravityQuotaGroups(models as AntigravityModelsPayload);
-        if (groups.length === 0) {
-          lastError = t('antigravity_quota.empty_models');
-          continue;
-        }
+      const groups = buildAntigravityQuotaGroups(models as AntigravityModelsPayload);
+      if (groups.length === 0) {
+        lastError = t('antigravity_quota.empty_models');
+        continue;
+      }
 
-        return groups;
-      } catch (err: unknown) {
-        lastError = err instanceof Error ? err.message : t('common.unknown_error');
-        const status = getStatusFromError(err);
-        if (status) {
-          lastStatus = status;
-          if (status === 403 || status === 404) {
-            priorityStatus ??= status;
-          }
+      return groups;
+    } catch (err: unknown) {
+      lastError = err instanceof Error ? err.message : t('common.unknown_error');
+      const status = getStatusFromError(err);
+      if (status) {
+        lastStatus = status;
+        if (status === 403 || status === 404) {
+          priorityStatus ??= status;
         }
       }
     }
@@ -202,6 +197,15 @@ const fetchAntigravityQuota = async (
 };
 
 const buildCodexQuotaWindows = (payload: CodexUsagePayload, t: TFunction): CodexQuotaWindow[] => {
+  const FIVE_HOUR_SECONDS = 18000;
+  const WEEK_SECONDS = 604800;
+  const WINDOW_META = {
+    codeFiveHour: { id: 'five-hour', labelKey: 'codex_quota.primary_window' },
+    codeWeekly: { id: 'weekly', labelKey: 'codex_quota.secondary_window' },
+    codeReviewFiveHour: { id: 'code-review-five-hour', labelKey: 'codex_quota.code_review_primary_window' },
+    codeReviewWeekly: { id: 'code-review-weekly', labelKey: 'codex_quota.code_review_secondary_window' },
+  } as const;
+
   const rateLimit = payload.rate_limit ?? payload.rateLimit ?? undefined;
   const codeReviewLimit = payload.code_review_rate_limit ?? payload.codeReviewRateLimit ?? undefined;
   const windows: CodexQuotaWindow[] = [];
@@ -223,30 +227,74 @@ const buildCodexQuotaWindows = (payload: CodexUsagePayload, t: TFunction): Codex
       label: t(labelKey),
       labelKey,
       usedPercent,
-      resetLabel
+      resetLabel,
     });
   };
 
+  const getWindowSeconds = (window?: CodexUsageWindow | null): number | null => {
+    if (!window) return null;
+    return normalizeNumberValue(window.limit_window_seconds ?? window.limitWindowSeconds);
+  };
+
+  const rawLimitReached = rateLimit?.limit_reached ?? rateLimit?.limitReached;
+  const rawAllowed = rateLimit?.allowed;
+
+  const pickClassifiedWindows = (
+    limitInfo?: CodexRateLimitInfo | null
+  ): { fiveHourWindow: CodexUsageWindow | null; weeklyWindow: CodexUsageWindow | null } => {
+    const rawWindows = [
+      limitInfo?.primary_window ?? limitInfo?.primaryWindow ?? null,
+      limitInfo?.secondary_window ?? limitInfo?.secondaryWindow ?? null,
+    ];
+
+    let fiveHourWindow: CodexUsageWindow | null = null;
+    let weeklyWindow: CodexUsageWindow | null = null;
+
+    for (const window of rawWindows) {
+      if (!window) continue;
+      const seconds = getWindowSeconds(window);
+      if (seconds === FIVE_HOUR_SECONDS && !fiveHourWindow) {
+        fiveHourWindow = window;
+      } else if (seconds === WEEK_SECONDS && !weeklyWindow) {
+        weeklyWindow = window;
+      }
+    }
+
+    return { fiveHourWindow, weeklyWindow };
+  };
+
+  const rateWindows = pickClassifiedWindows(rateLimit);
   addWindow(
-    'primary',
-    'codex_quota.primary_window',
-    rateLimit?.primary_window ?? rateLimit?.primaryWindow,
-    rateLimit?.limit_reached ?? rateLimit?.limitReached,
-    rateLimit?.allowed
+    WINDOW_META.codeFiveHour.id,
+    WINDOW_META.codeFiveHour.labelKey,
+    rateWindows.fiveHourWindow,
+    rawLimitReached,
+    rawAllowed
   );
   addWindow(
-    'secondary',
-    'codex_quota.secondary_window',
-    rateLimit?.secondary_window ?? rateLimit?.secondaryWindow,
-    rateLimit?.limit_reached ?? rateLimit?.limitReached,
-    rateLimit?.allowed
+    WINDOW_META.codeWeekly.id,
+    WINDOW_META.codeWeekly.labelKey,
+    rateWindows.weeklyWindow,
+    rawLimitReached,
+    rawAllowed
+  );
+
+  const codeReviewWindows = pickClassifiedWindows(codeReviewLimit);
+  const codeReviewLimitReached = codeReviewLimit?.limit_reached ?? codeReviewLimit?.limitReached;
+  const codeReviewAllowed = codeReviewLimit?.allowed;
+  addWindow(
+    WINDOW_META.codeReviewFiveHour.id,
+    WINDOW_META.codeReviewFiveHour.labelKey,
+    codeReviewWindows.fiveHourWindow,
+    codeReviewLimitReached,
+    codeReviewAllowed
   );
   addWindow(
-    'code-review',
-    'codex_quota.code_review_window',
-    codeReviewLimit?.primary_window ?? codeReviewLimit?.primaryWindow,
-    codeReviewLimit?.limit_reached ?? codeReviewLimit?.limitReached,
-    codeReviewLimit?.allowed
+    WINDOW_META.codeReviewWeekly.id,
+    WINDOW_META.codeReviewWeekly.labelKey,
+    codeReviewWindows.weeklyWindow,
+    codeReviewLimitReached,
+    codeReviewAllowed
   );
 
   return windows;
@@ -270,14 +318,14 @@ const fetchCodexQuota = async (
 
   const requestHeader: Record<string, string> = {
     ...CODEX_REQUEST_HEADERS,
-    'Chatgpt-Account-Id': accountId
+    'Chatgpt-Account-Id': accountId,
   };
 
   const result = await apiCallApi.request({
     authIndex,
     method: 'GET',
     url: CODEX_USAGE_URL,
-    header: requestHeader
+    header: requestHeader,
   });
 
   if (result.statusCode < 200 || result.statusCode >= 300) {
@@ -314,7 +362,7 @@ const fetchGeminiCliQuota = async (
     method: 'POST',
     url: GEMINI_CLI_QUOTA_URL,
     header: { ...GEMINI_CLI_REQUEST_HEADERS },
-    data: JSON.stringify({ project: projectId })
+    data: JSON.stringify({ project: projectId }),
   });
 
   if (result.statusCode < 200 || result.statusCode >= 300) {
@@ -333,7 +381,9 @@ const fetchGeminiCliQuota = async (
       const remainingFractionRaw = normalizeQuotaFraction(
         bucket.remainingFraction ?? bucket.remaining_fraction
       );
-      const remainingAmount = normalizeNumberValue(bucket.remainingAmount ?? bucket.remaining_amount);
+      const remainingAmount = normalizeNumberValue(
+        bucket.remainingAmount ?? bucket.remaining_amount
+      );
       const resetTime = normalizeStringValue(bucket.resetTime ?? bucket.reset_time) ?? undefined;
       let fallbackFraction: number | null = null;
       if (remainingAmount !== null) {
@@ -347,7 +397,7 @@ const fetchGeminiCliQuota = async (
         tokenType,
         remainingFraction,
         remainingAmount,
-        resetTime
+        resetTime,
       };
     })
     .filter((bucket): bucket is GeminiCliParsedBucket => bucket !== null);
@@ -379,11 +429,7 @@ const renderAntigravityItems = (
       h(
         'div',
         { className: styleMap.quotaRowHeader },
-        h(
-          'span',
-          { className: styleMap.quotaModel, title: group.models.join(', ') },
-          group.label
-        ),
+        h('span', { className: styleMap.quotaModel, title: group.models.join(', ') }, group.label),
         h(
           'div',
           { className: styleMap.quotaMeta },
@@ -416,7 +462,6 @@ const renderCodexItems = (
   };
 
   const planLabel = getPlanLabel(planType);
-  const isFreePlan = normalizePlanType(planType) === 'free';
   const nodes: ReactNode[] = [];
 
   if (planLabel) {
@@ -428,17 +473,6 @@ const renderCodexItems = (
         h('span', { className: styleMap.codexPlanValue }, planLabel)
       )
     );
-  }
-
-  if (isFreePlan) {
-    nodes.push(
-      h(
-        'div',
-        { key: 'warning', className: styleMap.quotaWarning },
-        t('codex_quota.no_access')
-      )
-    );
-    return h(Fragment, null, ...nodes);
   }
 
   if (windows.length === 0) {
@@ -500,7 +534,7 @@ const renderGeminiCliItems = (
       bucket.remainingAmount === null || bucket.remainingAmount === undefined
         ? null
         : t('gemini_cli_quota.remaining_amount', {
-            count: bucket.remainingAmount
+            count: bucket.remainingAmount,
           });
     const titleBase =
       bucket.modelIds && bucket.modelIds.length > 0 ? bucket.modelIds.join(', ') : bucket.label;
@@ -533,7 +567,7 @@ const renderGeminiCliItems = (
 export const ANTIGRAVITY_CONFIG: QuotaConfig<AntigravityQuotaState, AntigravityQuotaGroup[]> = {
   type: 'antigravity',
   i18nPrefix: 'antigravity_quota',
-  filterFn: (file) => isAntigravityFile(file),
+  filterFn: (file) => isAntigravityFile(file) && !isDisabledAuthFile(file),
   fetchQuota: fetchAntigravityQuota,
   storeSelector: (state) => state.antigravityQuota,
   storeSetter: 'setAntigravityQuota',
@@ -543,13 +577,13 @@ export const ANTIGRAVITY_CONFIG: QuotaConfig<AntigravityQuotaState, AntigravityQ
     status: 'error',
     groups: [],
     error: message,
-    errorStatus: status
+    errorStatus: status,
   }),
   cardClassName: styles.antigravityCard,
   controlsClassName: styles.antigravityControls,
   controlClassName: styles.antigravityControl,
   gridClassName: styles.antigravityGrid,
-  renderQuotaItems: renderAntigravityItems
+  renderQuotaItems: renderAntigravityItems,
 };
 
 export const CODEX_CONFIG: QuotaConfig<
@@ -558,7 +592,7 @@ export const CODEX_CONFIG: QuotaConfig<
 > = {
   type: 'codex',
   i18nPrefix: 'codex_quota',
-  filterFn: (file) => isCodexFile(file),
+  filterFn: (file) => isCodexFile(file) && !isDisabledAuthFile(file),
   fetchQuota: fetchCodexQuota,
   storeSelector: (state) => state.codexQuota,
   storeSetter: 'setCodexQuota',
@@ -566,25 +600,26 @@ export const CODEX_CONFIG: QuotaConfig<
   buildSuccessState: (data) => ({
     status: 'success',
     windows: data.windows,
-    planType: data.planType
+    planType: data.planType,
   }),
   buildErrorState: (message, status) => ({
     status: 'error',
     windows: [],
     error: message,
-    errorStatus: status
+    errorStatus: status,
   }),
   cardClassName: styles.codexCard,
   controlsClassName: styles.codexControls,
   controlClassName: styles.codexControl,
   gridClassName: styles.codexGrid,
-  renderQuotaItems: renderCodexItems
+  renderQuotaItems: renderCodexItems,
 };
 
 export const GEMINI_CLI_CONFIG: QuotaConfig<GeminiCliQuotaState, GeminiCliQuotaBucketState[]> = {
   type: 'gemini-cli',
   i18nPrefix: 'gemini_cli_quota',
-  filterFn: (file) => isGeminiCliFile(file) && !isRuntimeOnlyAuthFile(file),
+  filterFn: (file) =>
+    isGeminiCliFile(file) && !isRuntimeOnlyAuthFile(file) && !isDisabledAuthFile(file),
   fetchQuota: fetchGeminiCliQuota,
   storeSelector: (state) => state.geminiCliQuota,
   storeSetter: 'setGeminiCliQuota',
@@ -594,11 +629,299 @@ export const GEMINI_CLI_CONFIG: QuotaConfig<GeminiCliQuotaState, GeminiCliQuotaB
     status: 'error',
     buckets: [],
     error: message,
-    errorStatus: status
+    errorStatus: status,
   }),
   cardClassName: styles.geminiCliCard,
   controlsClassName: styles.geminiCliControls,
   controlClassName: styles.geminiCliControl,
   gridClassName: styles.geminiCliGrid,
-  renderQuotaItems: renderGeminiCliItems
+  renderQuotaItems: renderGeminiCliItems,
+};
+
+// Kiro quota data structure from API
+interface KiroQuotaData {
+  // Base quota (原本额度)
+  baseUsage: number | null;
+  baseLimit: number | null;
+  baseRemaining: number | null;
+  // Free trial/bonus quota (赠送额度)
+  bonusUsage: number | null;
+  bonusLimit: number | null;
+  bonusRemaining: number | null;
+  bonusStatus?: string;
+  // Total (合计)
+  currentUsage: number | null;
+  usageLimit: number | null;
+  remainingCredits: number | null;
+  nextReset?: string;
+  subscriptionType?: string;
+}
+
+const fetchKiroQuota = async (
+  file: AuthFileItem,
+  t: TFunction
+): Promise<KiroQuotaData> => {
+  const rawAuthIndex = file['auth_index'] ?? file.authIndex;
+  const authIndex = normalizeAuthIndexValue(rawAuthIndex);
+  if (!authIndex) {
+    throw new Error(t('kiro_quota.missing_auth_index'));
+  }
+
+  const result = await apiCallApi.request({
+    authIndex,
+    method: 'GET',
+    url: KIRO_QUOTA_URL,
+    header: { ...KIRO_REQUEST_HEADERS }
+  });
+
+  if (result.statusCode < 200 || result.statusCode >= 300) {
+    throw createStatusError(getApiCallErrorMessage(result), result.statusCode);
+  }
+
+  const payload = parseKiroQuotaPayload(result.body ?? result.bodyText);
+  if (!payload) {
+    throw new Error(t('kiro_quota.empty_data'));
+  }
+
+  // Extract usage data from usageBreakdownList (separating base and bonus)
+  const breakdownList = payload.usageBreakdownList ?? [];
+  let baseLimit = 0;
+  let baseUsage = 0;
+  let bonusLimit = 0;
+  let bonusUsage = 0;
+  let bonusStatus: string | undefined;
+
+  for (const breakdown of breakdownList) {
+    // Add base quota
+    const limit = normalizeNumberValue(breakdown.usageLimitWithPrecision ?? breakdown.usageLimit);
+    const usage = normalizeNumberValue(breakdown.currentUsageWithPrecision ?? breakdown.currentUsage);
+    if (limit !== null) baseLimit += limit;
+    if (usage !== null) baseUsage += usage;
+
+    // Add free trial quota if available (e.g., 500 bonus credits)
+    const freeTrialInfo = breakdown.freeTrialInfo;
+    if (freeTrialInfo) {
+      const freeLimit = normalizeNumberValue(freeTrialInfo.usageLimitWithPrecision ?? freeTrialInfo.usageLimit);
+      const freeUsage = normalizeNumberValue(freeTrialInfo.currentUsageWithPrecision ?? freeTrialInfo.currentUsage);
+      if (freeLimit !== null) bonusLimit += freeLimit;
+      if (freeUsage !== null) bonusUsage += freeUsage;
+      if (freeTrialInfo.freeTrialStatus) {
+        bonusStatus = freeTrialInfo.freeTrialStatus;
+      }
+    }
+  }
+
+  const totalLimit = baseLimit + bonusLimit;
+  const totalUsage = baseUsage + bonusUsage;
+
+  // Calculate next reset time
+  // Note: nextDateReset from Kiro API is in SECONDS (e.g., 1.769904E9 = 1769904000)
+  // JavaScript Date() requires milliseconds, so multiply by 1000
+  let nextReset: string | undefined;
+  if (payload.nextDateReset) {
+    // API returns seconds timestamp (scientific notation like 1.769904E9)
+    const timestampSeconds = payload.nextDateReset;
+    const resetDate = new Date(timestampSeconds * 1000);
+    if (!isNaN(resetDate.getTime())) {
+      nextReset = resetDate.toISOString();
+    }
+  }
+
+  // Get subscription type
+  const subscriptionType = payload.subscriptionInfo?.subscriptionTitle ?? payload.subscriptionInfo?.type;
+
+  return {
+    baseUsage,
+    baseLimit,
+    baseRemaining: baseLimit > 0 ? Math.max(0, baseLimit - baseUsage) : null,
+    bonusUsage,
+    bonusLimit,
+    bonusRemaining: bonusLimit > 0 ? Math.max(0, bonusLimit - bonusUsage) : null,
+    bonusStatus,
+    currentUsage: totalUsage,
+    usageLimit: totalLimit,
+    remainingCredits: totalLimit > 0 ? Math.max(0, totalLimit - totalUsage) : null,
+    nextReset,
+    subscriptionType
+  };
+};
+
+const renderKiroItems = (
+  quota: KiroQuotaState,
+  t: TFunction,
+  helpers: QuotaRenderHelpers
+): ReactNode => {
+  const { styles: styleMap, QuotaProgressBar } = helpers;
+  const { createElement: h, Fragment } = React;
+
+  const nodes: ReactNode[] = [];
+
+  // Show subscription type if available
+  if (quota.subscriptionType) {
+    nodes.push(
+      h(
+        'div',
+        { key: 'subscription', className: styleMap.codexPlan },
+        h('span', { className: styleMap.codexPlanLabel }, t('kiro_quota.subscription_label')),
+        h('span', { className: styleMap.codexPlanValue }, quota.subscriptionType)
+      )
+    );
+  }
+
+  const usageLimit = quota.usageLimit;
+
+  if (usageLimit === null || usageLimit === 0) {
+    nodes.push(
+      h('div', { key: 'empty', className: styleMap.quotaMessage }, t('kiro_quota.empty_data'))
+    );
+    return h(Fragment, null, ...nodes);
+  }
+
+  const resetLabel = formatQuotaResetTime(quota.nextReset);
+
+  // Base quota display (原本额度)
+  const baseLimit = quota.baseLimit;
+  const baseRemaining = quota.baseRemaining;
+  if (baseLimit !== null && baseLimit > 0) {
+    const baseRemainingPercent = baseRemaining !== null && baseLimit > 0
+      ? Math.round((baseRemaining / baseLimit) * 100)
+      : 0;
+
+    nodes.push(
+      h(
+        'div',
+        { key: 'base-credits', className: styleMap.quotaRow },
+        h(
+          'div',
+          { className: styleMap.quotaRowHeader },
+          h('span', { className: styleMap.quotaModel }, t('kiro_quota.base_credits_label')),
+          h(
+            'div',
+            { className: styleMap.quotaMeta },
+            h('span', { className: styleMap.quotaPercent }, `${baseRemainingPercent}%`),
+            baseRemaining !== null
+              ? h('span', { className: styleMap.quotaAmount }, t('kiro_quota.remaining_credits', { count: Math.round(baseRemaining) }))
+              : null,
+            h('span', { className: styleMap.quotaReset }, resetLabel)
+          )
+        ),
+        h(QuotaProgressBar, { percent: baseRemainingPercent, highThreshold: 60, mediumThreshold: 20 })
+      )
+    );
+  }
+
+  // Bonus quota display (赠送额度)
+  const bonusLimit = quota.bonusLimit;
+  const bonusRemaining = quota.bonusRemaining;
+  if (bonusLimit !== null && bonusLimit > 0) {
+    const bonusRemainingPercent = bonusRemaining !== null && bonusLimit > 0
+      ? Math.round((bonusRemaining / bonusLimit) * 100)
+      : 0;
+
+    nodes.push(
+      h(
+        'div',
+        { key: 'bonus-credits', className: styleMap.quotaRow },
+        h(
+          'div',
+          { className: styleMap.quotaRowHeader },
+          h('span', { className: styleMap.quotaModel }, t('kiro_quota.bonus_credits_label')),
+          h(
+            'div',
+            { className: styleMap.quotaMeta },
+            h('span', { className: styleMap.quotaPercent }, `${bonusRemainingPercent}%`),
+            bonusRemaining !== null
+              ? h('span', { className: styleMap.quotaAmount }, t('kiro_quota.remaining_credits', { count: Math.round(bonusRemaining) }))
+              : null
+          )
+        ),
+        h(QuotaProgressBar, { percent: bonusRemainingPercent, highThreshold: 60, mediumThreshold: 20 })
+      )
+    );
+  }
+
+  // Total credits display (合计)
+  const currentUsage = quota.currentUsage;
+  const remainingCredits = quota.remainingCredits;
+  const totalRemainingPercent = currentUsage !== null && usageLimit > 0
+    ? Math.max(0, 100 - Math.round((currentUsage / usageLimit) * 100))
+    : 0;
+
+  nodes.push(
+    h(
+      'div',
+      { key: 'total-credits', className: styleMap.quotaRow },
+      h(
+        'div',
+        { className: styleMap.quotaRowHeader },
+        h('span', { className: styleMap.quotaModel }, t('kiro_quota.total_credits_label')),
+        h(
+          'div',
+          { className: styleMap.quotaMeta },
+          h('span', { className: styleMap.quotaPercent }, `${totalRemainingPercent}%`),
+          remainingCredits !== null
+            ? h('span', { className: styleMap.quotaAmount }, t('kiro_quota.remaining_credits', { count: Math.round(remainingCredits) }))
+            : null
+        )
+      ),
+      h(QuotaProgressBar, { percent: totalRemainingPercent, highThreshold: 60, mediumThreshold: 20 })
+    )
+  );
+
+  return h(Fragment, null, ...nodes);
+};
+
+export const KIRO_CONFIG: QuotaConfig<KiroQuotaState, KiroQuotaData> = {
+  type: 'kiro',
+  i18nPrefix: 'kiro_quota',
+  filterFn: (file) => isKiroFile(file),
+  fetchQuota: fetchKiroQuota,
+  storeSelector: (state) => state.kiroQuota,
+  storeSetter: 'setKiroQuota',
+  buildLoadingState: () => ({
+    status: 'loading',
+    baseUsage: null,
+    baseLimit: null,
+    baseRemaining: null,
+    bonusUsage: null,
+    bonusLimit: null,
+    bonusRemaining: null,
+    currentUsage: null,
+    usageLimit: null,
+    remainingCredits: null
+  }),
+  buildSuccessState: (data) => ({
+    status: 'success',
+    baseUsage: data.baseUsage,
+    baseLimit: data.baseLimit,
+    baseRemaining: data.baseRemaining,
+    bonusUsage: data.bonusUsage,
+    bonusLimit: data.bonusLimit,
+    bonusRemaining: data.bonusRemaining,
+    bonusStatus: data.bonusStatus,
+    currentUsage: data.currentUsage,
+    usageLimit: data.usageLimit,
+    remainingCredits: data.remainingCredits,
+    nextReset: data.nextReset,
+    subscriptionType: data.subscriptionType
+  }),
+  buildErrorState: (message, status) => ({
+    status: 'error',
+    baseUsage: null,
+    baseLimit: null,
+    baseRemaining: null,
+    bonusUsage: null,
+    bonusLimit: null,
+    bonusRemaining: null,
+    currentUsage: null,
+    usageLimit: null,
+    remainingCredits: null,
+    error: message,
+    errorStatus: status
+  }),
+  cardClassName: styles.kiroCard,
+  controlsClassName: styles.kiroControls,
+  controlClassName: styles.kiroControl,
+  gridClassName: styles.kiroGrid,
+  renderQuotaItems: renderKiroItems
 };

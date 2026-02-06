@@ -6,6 +6,52 @@ import { Input } from '@/components/ui/Input';
 import { IconEye, IconEyeOff } from '@/components/ui/icons';
 import { useAuthStore, useLanguageStore, useNotificationStore } from '@/stores';
 import { detectApiBaseFromLocation, normalizeApiBase } from '@/utils/connection';
+import { INLINE_LOGO_JPEG } from '@/assets/logoInline';
+import type { ApiError } from '@/types';
+import styles from './LoginPage.module.scss';
+
+/**
+ * 将 API 错误转换为本地化的用户友好消息
+ */
+function getLocalizedErrorMessage(error: any, t: (key: string) => string): string {
+  const apiError = error as ApiError;
+  const status = apiError?.status;
+  const code = apiError?.code;
+  const message = apiError?.message || '';
+
+  // 根据 HTTP 状态码判断
+  if (status === 401) {
+    return t('login.error_unauthorized');
+  }
+  if (status === 403) {
+    return t('login.error_forbidden');
+  }
+  if (status === 404) {
+    return t('login.error_not_found');
+  }
+  if (status && status >= 500) {
+    return t('login.error_server');
+  }
+
+  // 根据 axios 错误码判断
+  if (code === 'ECONNABORTED' || message.toLowerCase().includes('timeout')) {
+    return t('login.error_timeout');
+  }
+  if (code === 'ERR_NETWORK' || message.toLowerCase().includes('network error')) {
+    return t('login.error_network');
+  }
+  if (code === 'ERR_CERT_AUTHORITY_INVALID' || message.toLowerCase().includes('certificate')) {
+    return t('login.error_ssl');
+  }
+
+  // 检查 CORS 错误
+  if (message.toLowerCase().includes('cors') || message.toLowerCase().includes('cross-origin')) {
+    return t('login.error_cors');
+  }
+
+  // 默认错误消息
+  return t('login.error_invalid');
+}
 
 export function LoginPage() {
   const { t } = useTranslation();
@@ -28,6 +74,7 @@ export function LoginPage() {
   const [rememberPassword, setRememberPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [autoLoading, setAutoLoading] = useState(true);
+  const [autoLoginSuccess, setAutoLoginSuccess] = useState(false);
   const [error, setError] = useState('');
 
   const detectedBase = useMemo(() => detectApiBaseFromLocation(), []);
@@ -37,20 +84,30 @@ export function LoginPage() {
     const init = async () => {
       try {
         const autoLoggedIn = await restoreSession();
-        if (!autoLoggedIn) {
+        if (autoLoggedIn) {
+          setAutoLoginSuccess(true);
+          // 延迟跳转，让用户看到成功动画
+          setTimeout(() => {
+            const redirect = (location.state as any)?.from?.pathname || '/';
+            navigate(redirect, { replace: true });
+          }, 1500);
+        } else {
           setApiBase(storedBase || detectedBase);
           setManagementKey(storedKey || '');
           setRememberPassword(storedRememberPassword || Boolean(storedKey));
         }
       } finally {
-        setAutoLoading(false);
+        if (!autoLoginSuccess) {
+          setAutoLoading(false);
+        }
       }
     };
 
     init();
-  }, [detectedBase, restoreSession, storedBase, storedKey, storedRememberPassword]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const handleSubmit = async () => {
+  const handleSubmit = useCallback(async () => {
     if (!managementKey.trim()) {
       setError(t('login.error_required'));
       return;
@@ -68,13 +125,13 @@ export function LoginPage() {
       showNotification(t('common.connected_status'), 'success');
       navigate('/', { replace: true });
     } catch (err: any) {
-      const message = err?.message || t('login.error_invalid');
+      const message = getLocalizedErrorMessage(err, t);
       setError(message);
       showNotification(`${t('notification.login_failed')}: ${message}`, 'error');
     } finally {
       setLoading(false);
     }
-  };
+  }, [apiBase, detectedBase, login, managementKey, navigate, rememberPassword, showNotification, t]);
 
   const handleSubmitKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
@@ -86,107 +143,134 @@ export function LoginPage() {
     [loading, handleSubmit]
   );
 
-  if (isAuthenticated) {
+  if (isAuthenticated && !autoLoading && !autoLoginSuccess) {
     const redirect = (location.state as any)?.from?.pathname || '/';
     return <Navigate to={redirect} replace />;
   }
 
+  // 显示启动动画（自动登录中或自动登录成功）
+  const showSplash = autoLoading || autoLoginSuccess;
+
   return (
-    <div className="login-page">
-      <div className="login-card">
-        <div className="login-header">
-          <div className="login-title-row">
-            <div className="title">{t('title.login')}</div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="login-language-btn"
-              onClick={toggleLanguage}
-              title={t('language.switch')}
-              aria-label={t('language.switch')}
-            >
-              {nextLanguageLabel}
-            </Button>
+    <div className={styles.container}>
+      {/* 左侧品牌展示区 */}
+      <div className={styles.brandPanel}>
+        <div className={styles.brandContent}>
+          <span className={styles.brandWord}>CLI</span>
+          <span className={styles.brandWord}>PROXY</span>
+          <span className={styles.brandWord}>API</span>
+        </div>
+      </div>
+
+      {/* 右侧功能交互区 */}
+      <div className={styles.formPanel}>
+        {showSplash ? (
+          /* 启动动画 */
+          <div className={styles.splashContent}>
+            <img src={INLINE_LOGO_JPEG} alt="CPAMC" className={styles.splashLogo} />
+            <h1 className={styles.splashTitle}>CLI Proxy API</h1>
+            <p className={styles.splashSubtitle}>Management Center</p>
+            <div className={styles.splashLoader}>
+              <div className={styles.splashLoaderBar} />
+            </div>
           </div>
-          <div className="subtitle">{t('login.subtitle')}</div>
-        </div>
+        ) : (
+          /* 登录表单 */
+          <div className={styles.formContent}>
+            {/* Logo */}
+            <img src={INLINE_LOGO_JPEG} alt="Logo" className={styles.logo} />
 
-        <div className="connection-box">
-          <div className="label">{t('login.connection_current')}</div>
-          <div className="value">{apiBase || detectedBase}</div>
-          <div className="hint">{t('login.connection_auto_hint')}</div>
-        </div>
+            {/* 登录表单卡片 */}
+            <div className={styles.loginCard}>
+              <div className={styles.loginHeader}>
+                <div className={styles.titleRow}>
+                  <div className={styles.title}>{t('title.login')}</div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className={styles.languageBtn}
+                    onClick={toggleLanguage}
+                    title={t('language.switch')}
+                    aria-label={t('language.switch')}
+                  >
+                    {nextLanguageLabel}
+                  </Button>
+                </div>
+                <div className={styles.subtitle}>{t('login.subtitle')}</div>
+              </div>
 
-        <div className="toggle-advanced">
-          <input
-            id="custom-connection-toggle"
-            type="checkbox"
-            checked={showCustomBase}
-            onChange={(e) => setShowCustomBase(e.target.checked)}
-          />
-          <label htmlFor="custom-connection-toggle">{t('login.custom_connection_label')}</label>
-        </div>
+              <div className={styles.connectionBox}>
+                <div className={styles.label}>{t('login.connection_current')}</div>
+                <div className={styles.value}>{apiBase || detectedBase}</div>
+                <div className={styles.hint}>{t('login.connection_auto_hint')}</div>
+              </div>
 
-        {showCustomBase && (
-          <Input
-            label={t('login.custom_connection_label')}
-            placeholder={t('login.custom_connection_placeholder')}
-            value={apiBase}
-            onChange={(e) => setApiBase(e.target.value)}
-            hint={t('login.custom_connection_hint')}
-          />
-        )}
+              <div className={styles.toggleAdvanced}>
+                <input
+                  id="custom-connection-toggle"
+                  type="checkbox"
+                  checked={showCustomBase}
+                  onChange={(e) => setShowCustomBase(e.target.checked)}
+                />
+                <label htmlFor="custom-connection-toggle">{t('login.custom_connection_label')}</label>
+              </div>
 
-        <Input
-          autoFocus
-          label={t('login.management_key_label')}
-          placeholder={t('login.management_key_placeholder')}
-          type={showKey ? 'text' : 'password'}
-          value={managementKey}
-          onChange={(e) => setManagementKey(e.target.value)}
-          onKeyDown={handleSubmitKeyDown}
-          rightElement={
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              onClick={() => setShowKey((prev) => !prev)}
-              aria-label={
-                showKey
-                  ? t('login.hide_key', { defaultValue: '隐藏密钥' })
-                  : t('login.show_key', { defaultValue: '显示密钥' })
-              }
-              title={
-                showKey
-                  ? t('login.hide_key', { defaultValue: '隐藏密钥' })
-                  : t('login.show_key', { defaultValue: '显示密钥' })
-              }
-            >
-              {showKey ? <IconEyeOff size={16} /> : <IconEye size={16} />}
-            </button>
-          }
-        />
+              {showCustomBase && (
+                <Input
+                  label={t('login.custom_connection_label')}
+                  placeholder={t('login.custom_connection_placeholder')}
+                  value={apiBase}
+                  onChange={(e) => setApiBase(e.target.value)}
+                  hint={t('login.custom_connection_hint')}
+                />
+              )}
 
-        <div className="toggle-advanced">
-          <input
-            id="remember-password-toggle"
-            type="checkbox"
-            checked={rememberPassword}
-            onChange={(e) => setRememberPassword(e.target.checked)}
-          />
-          <label htmlFor="remember-password-toggle">{t('login.remember_password_label')}</label>
-        </div>
+              <Input
+                autoFocus
+                label={t('login.management_key_label')}
+                placeholder={t('login.management_key_placeholder')}
+                type={showKey ? 'text' : 'password'}
+                value={managementKey}
+                onChange={(e) => setManagementKey(e.target.value)}
+                onKeyDown={handleSubmitKeyDown}
+                rightElement={
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => setShowKey((prev) => !prev)}
+                    aria-label={
+                      showKey
+                        ? t('login.hide_key', { defaultValue: '隐藏密钥' })
+                        : t('login.show_key', { defaultValue: '显示密钥' })
+                    }
+                    title={
+                      showKey
+                        ? t('login.hide_key', { defaultValue: '隐藏密钥' })
+                        : t('login.show_key', { defaultValue: '显示密钥' })
+                    }
+                  >
+                    {showKey ? <IconEyeOff size={16} /> : <IconEye size={16} />}
+                  </button>
+                }
+              />
 
-        <Button fullWidth onClick={handleSubmit} loading={loading}>
-          {loading ? t('login.submitting') : t('login.submit_button')}
-        </Button>
+              <div className={styles.toggleAdvanced}>
+                <input
+                  id="remember-password-toggle"
+                  type="checkbox"
+                  checked={rememberPassword}
+                  onChange={(e) => setRememberPassword(e.target.checked)}
+                />
+                <label htmlFor="remember-password-toggle">{t('login.remember_password_label')}</label>
+              </div>
 
-        {error && <div className="error-box">{error}</div>}
+              <Button fullWidth onClick={handleSubmit} loading={loading}>
+                {loading ? t('login.submitting') : t('login.submit_button')}
+              </Button>
 
-        {autoLoading && (
-          <div className="connection-box">
-            <div className="label">{t('auto_login.title')}</div>
-            <div className="value">{t('auto_login.message')}</div>
+              {error && <div className={styles.errorBox}>{error}</div>}
+            </div>
           </div>
         )}
       </div>

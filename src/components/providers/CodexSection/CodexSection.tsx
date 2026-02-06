@@ -3,8 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
-import iconOpenaiLight from '@/assets/icons/openai-light.svg';
-import iconOpenaiDark from '@/assets/icons/openai-dark.svg';
+import iconCodexLight from '@/assets/icons/codex_light.svg';
+import iconCodexDark from '@/assets/icons/codex_drak.svg';
 import type { ProviderKeyConfig } from '@/types';
 import { maskApiKey } from '@/utils/format';
 import {
@@ -17,8 +17,6 @@ import styles from '@/pages/AiProvidersPage.module.scss';
 import { ProviderList } from '../ProviderList';
 import { ProviderStatusBar } from '../ProviderStatusBar';
 import { getStatsBySource, hasDisableAllModelsRule } from '../utils';
-import type { ProviderFormState } from '../types';
-import { CodexModal } from './CodexModal';
 
 interface CodexSectionProps {
   configs: ProviderKeyConfig[];
@@ -26,17 +24,12 @@ interface CodexSectionProps {
   usageDetails: UsageDetail[];
   loading: boolean;
   disableControls: boolean;
-  isSaving: boolean;
   isSwitching: boolean;
   resolvedTheme: string;
-  isModalOpen: boolean;
-  modalIndex: number | null;
   onAdd: () => void;
   onEdit: (index: number) => void;
   onDelete: (index: number) => void;
   onToggle: (index: number, enabled: boolean) => void;
-  onCloseModal: () => void;
-  onSave: (data: ProviderFormState, index: number | null) => Promise<void>;
 }
 
 export function CodexSection({
@@ -45,21 +38,16 @@ export function CodexSection({
   usageDetails,
   loading,
   disableControls,
-  isSaving,
   isSwitching,
   resolvedTheme,
-  isModalOpen,
-  modalIndex,
   onAdd,
   onEdit,
   onDelete,
   onToggle,
-  onCloseModal,
-  onSave,
 }: CodexSectionProps) {
   const { t } = useTranslation();
-  const actionsDisabled = disableControls || isSaving || isSwitching;
-  const toggleDisabled = disableControls || loading || isSaving || isSwitching;
+  const actionsDisabled = disableControls || loading || isSwitching;
+  const toggleDisabled = disableControls || loading || isSwitching;
 
   const statusBarCache = useMemo(() => {
     const cache = new Map<string, ReturnType<typeof calculateStatusBarData>>();
@@ -79,15 +67,13 @@ export function CodexSection({
     return cache;
   }, [configs, usageDetails]);
 
-  const initialData = modalIndex !== null ? configs[modalIndex] : undefined;
-
   return (
     <>
       <Card
         title={
           <span className={styles.cardTitle}>
             <img
-              src={resolvedTheme === 'dark' ? iconOpenaiDark : iconOpenaiLight}
+              src={resolvedTheme === 'dark' ? iconCodexDark : iconCodexLight}
               alt=""
               className={styles.cardTitleIcon}
             />
@@ -192,15 +178,6 @@ export function CodexSection({
           }}
         />
       </Card>
-
-      <CodexModal
-        isOpen={isModalOpen}
-        editIndex={modalIndex}
-        initialData={initialData}
-        onClose={onCloseModal}
-        onSave={onSave}
-        isSaving={isSaving}
-      />
     </>
   );
 }
